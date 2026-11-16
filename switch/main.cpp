@@ -27,10 +27,14 @@
 #include "core/input.h"
 #include "core/log.h"
 #include "gpu/backend.h"
+#include "kernel/waitmon.h"
 #include "host.h"
 #include "image_symbols.h"
 #include "kernel/kernel.h"
 #include "menu.h"
+
+// Shadow-nx: guest loads acquire and stores release when on (x86_ops.h, XBE_TSO); live, also from the port menu
+bool x86_g_tso = false;
 
 namespace {
 
@@ -74,7 +78,8 @@ uint32_t g_texture_check_frames = 8;
 bool g_profile = false;
 // core_layout: the title thread alone on core 0, the render thread on core 1, the rest on 2 (cores.cpp)
 bool g_core_layout = false;
-bool g_guest_one_core = true;  // Shadow-nx: guest threads on one core (cores.cpp)
+bool g_guest_one_core = false;  // Shadow-nx: guest threads on one core (cores.cpp); off: switch-test3 hung on it
+bool g_guest_one_core_next = false;  // what the menu set, saved, in force from the next start
 // frame_pacing: "vsync" (default) lets the screen pace the game when vsync is on and the cap is the refresh rate;
 // "timer" also sleeps the title thread to its own 60 Hz grid, as before
 std::string g_frame_pacing = "vsync";
@@ -92,6 +97,8 @@ uint32_t TextureCheckFrames() { return g_texture_check_frames; }
 bool Smaa() { return g_smaa; }
 bool CoreLayout() { return g_core_layout; }
 bool GuestOneCore() { return g_guest_one_core; }
+void SetGuestOneCore(bool on) { g_guest_one_core_next = on; }
+bool GuestOneCoreNext() { return g_guest_one_core_next; }
 }  // namespace host
 
 namespace app {
@@ -120,8 +127,10 @@ toml::table Table() {
                   {"draw_copy", gpu::g_draw_copy.load()},
                   {"saltynx", g_saltynx},
                   {"profile", g_profile},
+                  {"wait_monitor", kernel::waitmon::g_on},
+                  {"x86_memory_order", x86_g_tso},
                   {"core_layout", g_core_layout},
-                  {"guest_one_core", g_guest_one_core},
+                  {"guest_one_core", g_guest_one_core_next},
                   {"reuse_constants", gpu::g_reuse_constants.load()},
                   {"cpu_mhz", int64_t(host::ClockWanted("cpu"))},
                   {"gpu_mhz", int64_t(host::ClockWanted("gpu"))},
@@ -154,6 +163,7 @@ Settings DefaultSettings() {
     gpu::g_draw_copy = true;
     gpu::g_track_state = true;  // the render thread compares only the render states and constants written
     gpu::g_reuse_constants = true;  // a draw with the previous draw's constants reuses their upload
+    kernel::waitmon::g_on = true;  // Shadow-nx: switch-test4's wait monitor
     return s;
 }
 
@@ -189,8 +199,10 @@ void Load() {
     gpu::g_draw_copy = t["draw_copy"].value_or(gpu::g_draw_copy.load());
     g_saltynx = t["saltynx"].value_or(g_saltynx);
     g_profile = t["profile"].value_or(g_profile);
+    kernel::waitmon::g_on = t["wait_monitor"].value_or(kernel::waitmon::g_on);
+    x86_g_tso = t["x86_memory_order"].value_or(x86_g_tso);
     g_core_layout = t["core_layout"].value_or(g_core_layout);
-    g_guest_one_core = t["guest_one_core"].value_or(g_guest_one_core);
+    g_guest_one_core = g_guest_one_core_next = t["guest_one_core"].value_or(g_guest_one_core);
     gpu::g_reuse_constants = t["reuse_constants"].value_or(gpu::g_reuse_constants.load());
     for (const char* c : {"cpu", "gpu", "mem"})
         host::SetClockWanted(c, t[std::string(c) + "_mhz"].value_or(host::ClockWanted(c)));
@@ -399,6 +411,16 @@ int main(int, char**) {
     g_op_mode = appletGetOperationMode();
     g_docked = g_op_mode == AppletOperationMode_Console;
     std::filesystem::create_directories(std::filesystem::path(kDir) / "logs");
+    // Shadow-nx: the last runs' logs kept (shadow.1.log the run before, up to shadow.5.log; prof.bin likewise), so a
+    // test of several runs in one sitting loses none. The card's FAT renames nothing onto an existing file.
+    for (const char* stem : {"shadow", "prof"}) {
+        const char* ext = std::strcmp(stem, "prof") ? ".log" : ".bin";
+        auto name = [&](int k) {
+            return std::string(kDir) + "/logs/" + stem + (k ? "." + std::to_string(k) : std::string()) + ext;
+        };
+        std::remove(name(5).c_str());
+        for (int k = 4; k >= 0; k--) std::rename(name(k).c_str(), name(k + 1).c_str());
+    }
     // what the driver prints goes to stderr: a file beside the logs, written as it comes
     std::freopen((std::string(kDir) + "/logs/stderr.log").c_str(), "w", stderr);
     std::setvbuf(stderr, nullptr, _IONBF, 0);
@@ -412,6 +434,7 @@ int main(int, char**) {
     app::LogSystem();
     host::ApplyClocks();
     if (g_profile) host::StartProfiler();
+    kernel::waitmon::Start();  // Shadow-nx: wait_monitor
     host::PgoStart();
 
     if (!TitleMode()) {

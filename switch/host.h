@@ -35,6 +35,8 @@ void WatchClocks();    // from the main loop: the asked clocks set again if some
 // core_layout in the settings: shadow_place_thread (cores.cpp) pins the title, render and other threads
 bool CoreLayout();
 bool GuestOneCore();  // Shadow-nx: guest threads on core 0 alone (cores.cpp)
+void SetGuestOneCore(bool on);  // saved with the settings; applies from the next start
+bool GuestOneCoreNext();
 // SHADOW_PGO=generate builds only (pgo.cpp): the profile streams on the SD; nothing in other builds
 void PgoStart();
 void PgoDump(bool now);  // now = false: only when a minute has gone by since the last

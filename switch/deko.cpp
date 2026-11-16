@@ -2438,7 +2438,7 @@ void DekoBackend::SaveShot(Target& t, Image* shown) {
 // draws them right: raw packed vertices (g_packed_strides), native fans and quads (g_native_polygons), textures
 // checked in full only every 8th frame (texture_check_frames), state tracking (headers and blocks sent only when
 // set) and constant reuse. Starts after 2 s of frames with 150 draws or more (a stage), up to 3 times (new stages).
-constexpr bool kDiagCycle = false;  // on for switch-test2 only
+constexpr bool kDiagCycle = true;  // switch-test2 (never reached a stage) and switch-test4
 void DekoBackend::DiagCycle() {
     struct Step {
         const char* name;

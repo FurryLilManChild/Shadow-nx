@@ -82,6 +82,8 @@ set(HOST_INCLUDES ${HOST}/compat ${SDK}/harness/compat ${HOST} ${GAME} ${SDK}/ru
     ${THIRD}/glslang ${VULKAN_INCLUDE} ${THIRD}/SPIRV-Cross ${THIRD}/uam)
 # x86 chars are signed, as the game's code and the runtime were written for
 set(HOST_OPTIONS -fno-strict-aliasing -fsigned-char)
+# Shadow-nx: x86 memory order on demand for guest memory (sdk/runtime/cpu/x86_ops.h, the setting x86_memory_order)
+add_compile_definitions(XBE_TSO)
 # every log level (info and debug lines too) in this release build, for console diagnostics
 option(SHADOW_VERBOSE_LOG "log info and debug lines" OFF)
 if(SHADOW_VERBOSE_LOG)

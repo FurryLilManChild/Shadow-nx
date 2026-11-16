@@ -7,6 +7,7 @@
 #include "app/app.h"
 #include "kernel/crypto.h"
 #include "kernel/exports.h"
+#include "kernel/waitmon.h"
 #include "xbe/xbe.h"
 
 namespace kernel {
@@ -149,6 +150,7 @@ KERNEL_EXPORT(277, RtlEnterCriticalSection, 1) {
         return 0;
     }
     ObjectRef ev = FromPointer(cs);
+    waitmon::Hint("critical section", cs);
     Wait({ev}, false, INT64_MAX, false);
     W32(cs + 0x18, me);
     W32(cs + 0x14, 1);
@@ -269,14 +271,20 @@ KERNEL_EXPORT(99, KeDelayExecutionThread, 3) {
     };
     SuspendPoint();
     if (interval == 0) {
+        waitmon::Yielded();
         std::this_thread::yield();
         return kSuccess;
     }
+    waitmon::BeginDelay(interval);
     while (now() < deadline) {
         int64_t left = deadline - now();
         std::this_thread::sleep_for(std::chrono::nanoseconds(std::min<int64_t>(left, 2000000)));
-        if (alertable && t && RunApcs(*t)) return kUserApc;
+        if (alertable && t && RunApcs(*t)) {
+            waitmon::EndDelay();
+            return kUserApc;
+        }
     }
+    waitmon::EndDelay();
     return kSuccess;
 }
 
@@ -843,6 +851,7 @@ KERNEL_EXPORT(140, KeResumeThread, 1) {
 KERNEL_EXPORT(92, KeAlertResumeThread, 1) { return kimpl_KeResumeThread(ctx, a); }
 
 KERNEL_EXPORT(238, NtYieldExecution, 0) {
+    waitmon::Yielded();
     SuspendPoint();
     std::this_thread::yield();
     return kSuccess;

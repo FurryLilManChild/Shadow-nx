@@ -24,12 +24,60 @@ typedef float __attribute__((aligned(1), may_alias)) x86_f32u;
 typedef double __attribute__((aligned(1), may_alias)) x86_f64u;
 #endif
 
+#ifdef XBE_TSO
+// Shadow-nx: x86 memory order on demand (the setting x86_memory_order, x86_g_tso). An x86 CPU never lets another core
+// see two stores, or two loads, out of order; the Switch's ARM cores may, and the title's threads were written for an
+// x86 (one CPU on the Xbox). With x86_g_tso on, every guest load acquires and every guest store releases, as x86-on-ARM
+// translators do: ordered as on an x86, for some speed. Unaligned accesses get a fence instead (ldar and stlr need
+// alignment). Off, an access costs one test of the flag. A diagnostic first (switch-test4): does the Switch-only
+// breakage go away with it?
+extern bool x86_g_tso;
+template <class T, class U>
+struct x86_guest_ref {
+    uint8_t* p;
+    using I = std::conditional_t<sizeof(T) == 1, uint8_t, std::conditional_t<sizeof(T) == 2, uint16_t,
+                                 std::conditional_t<sizeof(T) == 4, uint32_t, uint64_t>>>;
+    __attribute__((always_inline)) operator T() const {
+        if (__builtin_expect(!x86_g_tso, 1)) return *(U*)p;
+        if (!(reinterpret_cast<uintptr_t>(p) & (sizeof(T) - 1))) {
+            I v = __atomic_load_n(reinterpret_cast<I*>(p), __ATOMIC_ACQUIRE);
+            T r;
+            std::memcpy(&r, &v, sizeof(T));
+            return r;
+        }
+        T r = *(U*)p;
+        __atomic_thread_fence(__ATOMIC_ACQUIRE);
+        return r;
+    }
+    __attribute__((always_inline)) const x86_guest_ref& operator=(T v) const {
+        if (__builtin_expect(!x86_g_tso, 1)) {
+            *(U*)p = v;
+        } else if (!(reinterpret_cast<uintptr_t>(p) & (sizeof(T) - 1))) {
+            I i;
+            std::memcpy(&i, &v, sizeof(T));
+            __atomic_store_n(reinterpret_cast<I*>(p), i, __ATOMIC_RELEASE);
+        } else {
+            __atomic_thread_fence(__ATOMIC_RELEASE);
+            *(U*)p = v;
+        }
+        return *this;
+    }
+    __attribute__((always_inline)) const x86_guest_ref& operator=(const x86_guest_ref& o) const { return *this = T(o); }
+};
+#define X86_MEM8(a) (x86_guest_ref<uint8_t, uint8_t>{base + (uint32_t)(a)})
+#define X86_MEM16(a) (x86_guest_ref<uint16_t, x86_u16u>{base + (uint32_t)(a)})
+#define X86_MEM32(a) (x86_guest_ref<uint32_t, x86_u32u>{base + (uint32_t)(a)})
+#define X86_MEM64(a) (x86_guest_ref<uint64_t, x86_u64u>{base + (uint32_t)(a)})
+#define X86_MEMF32(a) (x86_guest_ref<float, x86_f32u>{base + (uint32_t)(a)})
+#define X86_MEMF64(a) (x86_guest_ref<double, x86_f64u>{base + (uint32_t)(a)})
+#else
 #define X86_MEM8(a) (*(uint8_t*)(base + (uint32_t)(a)))
 #define X86_MEM16(a) (*(x86_u16u*)(base + (uint32_t)(a)))
 #define X86_MEM32(a) (*(x86_u32u*)(base + (uint32_t)(a)))
 #define X86_MEM64(a) (*(x86_u64u*)(base + (uint32_t)(a)))
 #define X86_MEMF32(a) (*(x86_f32u*)(base + (uint32_t)(a)))
 #define X86_MEMF64(a) (*(x86_f64u*)(base + (uint32_t)(a)))
+#endif
 #define X86_PTR(T, a) ((T*)(base + (uint32_t)(a)))
 
 #define X86_FUNC(name) extern "C" void name(X86Context& __restrict ctx, uint8_t* base)

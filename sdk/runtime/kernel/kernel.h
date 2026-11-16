@@ -112,6 +112,11 @@ struct Object {
     uint32_t owner = 0;         // mutant owner thread
     uint32_t recursion = 0;
     std::string name;
+    // Shadow-nx: the wait monitor's record of the last kernel signal (kernel/waitmon.h)
+    std::atomic<int64_t> last_signal_ns{0};
+    std::atomic<uint32_t> last_signal_thread{0};
+    const char* last_signal_how = nullptr;
+    std::atomic<uint32_t> signal_count{0};
     explicit Object(ObjType t) : type(t) {}
     virtual ~Object() = default;
 };

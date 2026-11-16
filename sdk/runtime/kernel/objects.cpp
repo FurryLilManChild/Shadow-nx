@@ -4,6 +4,7 @@
 #include <queue>
 
 #include "kernel/kernel.h"
+#include "kernel/waitmon.h"
 
 namespace kernel {
 
@@ -233,7 +234,9 @@ static uint32_t WaitFor(const std::vector<ObjectRef>& objs, bool wait_all, int64
 
 uint32_t Wait(const std::vector<ObjectRef>& objs, bool wait_all, int64_t timeout, bool alertable) {
     SuspendPoint();
+    waitmon::BeginWait(objs, wait_all, timeout);
     uint32_t r = WaitFor(objs, wait_all, timeout, alertable);
+    waitmon::EndWait(r);
     SuspendPoint();
     return r;
 }
@@ -242,6 +245,7 @@ int32_t SetEvent(Object& o) {
     std::lock_guard<std::mutex> lock(g_dispatch);
     int32_t old = o.signal;
     SetSignal(o, 1);
+    waitmon::Signalled(o, "SetEvent");
     g_cv.notify_all();
     return old;
 }
@@ -258,6 +262,7 @@ int32_t PulseEvent(Object& o) {
     std::lock_guard<std::mutex> lock(g_dispatch);
     int32_t old = o.signal;
     SetSignal(o, 1);
+    waitmon::Signalled(o, "PulseEvent");
     g_cv.notify_all();
     return old;
 }
@@ -270,6 +275,7 @@ int32_t ReleaseSemaphore(Object& o, int32_t count, uint32_t& status) {
         return old;
     }
     SetSignal(o, old + count);
+    waitmon::Signalled(o, "ReleaseSemaphore");
     status = kSuccess;
     g_cv.notify_all();
     return old;
@@ -286,6 +292,7 @@ int32_t ReleaseMutant(Object& o, uint32_t& status) {
     if (--o.recursion == 0) {
         o.owner = 0;
         SetSignal(o, 1);
+        waitmon::Signalled(o, "ReleaseMutant");
         g_cv.notify_all();
     }
     status = kSuccess;
@@ -369,6 +376,7 @@ static void TimerLoop() {
         {
             std::lock_guard<std::mutex> dl(g_dispatch);
             SetSignal(*e.timer, 1);
+            waitmon::Signalled(*e.timer, "timer");
             g_cv.notify_all();
         }
         if (e.dpc) QueueDpc(e.dpc, uint32_t(Now100ns()), uint32_t(Now100ns() >> 32));
