@@ -22,6 +22,8 @@
 
 namespace shadow {
 
+void MovieSkipPad(input::Pad& pad);  // hooks.cpp: Start skips a movie
+
 namespace {
 
 using Clock = std::chrono::steady_clock;
@@ -88,6 +90,7 @@ void Apply(const std::string& s, input::Pad& p) {
 
 void ScriptPad(int port, input::Pad& pad) {
     if (port != 0) return;
+    MovieSkipPad(pad);  // Shadow-nx
     static bool loaded = false;
     std::lock_guard lock(g_lock);
     Clock::time_point now = Clock::now();

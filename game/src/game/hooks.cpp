@@ -7,5 +7,49 @@
 //     __imp__sub_00012345(ctx, base);  // the original
 // }
 //
-// (street-nx's EA sound guard fix lived here; sheroes-nx has none yet.)
+// (street-nx's EA sound guard fix lived here; sheroes-nx had none.)
+#include <atomic>
+#include <chrono>
+
+#include "core/input.h"
+#include "core/log.h"
 #include "kernel/kernel.h"
+
+// Shadow-nx: Start (Switch +) skips a movie. Shadow plays its story movies (E1001.sfd, the Westopolis opening, and
+// the rest) through CRI Sofdec, and its movie manager ends a movie when mwPlyGetStat (0x340CC0) answers PLAYEND (3)
+// or ERROR (4) (0x255A4, 0x24DFF, 0x24EB7, 0x24F17). With a skip asked for, a playing movie (2) answers PLAYEND, and
+// the game ends it its own way. While a movie plays, Start goes to the skip and not to the game.
+namespace shadow {
+namespace {
+using Clock = std::chrono::steady_clock;
+std::atomic<int64_t> g_movie_seen{0};  // ns, the last time mwPlyGetStat answered PLAYING
+std::atomic<bool> g_skip{false};
+bool g_start_held = false;
+
+int64_t Now() { return std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now().time_since_epoch()).count(); }
+bool MoviePlaying() { return Now() - g_movie_seen.load() < 500'000'000; }
+}  // namespace
+
+// from ScriptPad (pad_script.cpp), every poll of player 1
+void MovieSkipPad(input::Pad& pad) {
+    bool start = pad.buttons & 16;
+    if (MoviePlaying()) {
+        if (start && !g_start_held && !g_skip.exchange(true)) LOGR("movie: skipped (Start)");
+        pad.buttons &= uint16_t(~16u);
+    } else {
+        g_skip.store(false);  // no movie for half a second: the next one plays
+    }
+    g_start_held = start;
+}
+}  // namespace shadow
+
+X86_EXTERN_FUNC(__imp__sub_00340CC0);
+X86_FUNC(sub_00340CC0) {  // mwPlyGetStat(handle)
+    __imp__sub_00340CC0(ctx, base);
+    if (ctx.eax == 2) {
+        shadow::g_movie_seen.store(shadow::Now());
+        if (shadow::g_skip.load()) ctx.eax = 3;
+    } else if (shadow::g_skip.load() && ctx.eax != 3) {
+        shadow::g_skip.store(false);  // stopped: the next movie plays
+    }
+}
