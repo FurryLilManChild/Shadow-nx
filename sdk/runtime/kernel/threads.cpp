@@ -101,7 +101,9 @@ void NameHostThread(const char* name) {
 #elif defined(__SWITCH__)
     // newlib has no pthread_setname_np; the Switch layer's profiler keeps the name and handle (switch/profiler.cpp)
     if (shadow_profile_thread) shadow_profile_thread(name);
-    if (shadow_place_thread) shadow_place_thread(2);  // off the title thread's core; it moves itself back
+    // Shadow-nx: role 3, a thread running guest code (the title's threads, and the DPC, vertical blank and sound
+    // callback threads): with guest_one_core they all share one core, as on the Xbox's single CPU
+    if (shadow_place_thread) shadow_place_thread(3);
 #else
     pthread_setname_np(pthread_self(), name);
 #endif

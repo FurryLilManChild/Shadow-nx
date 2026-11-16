@@ -74,6 +74,7 @@ uint32_t g_texture_check_frames = 8;
 bool g_profile = false;
 // core_layout: the title thread alone on core 0, the render thread on core 1, the rest on 2 (cores.cpp)
 bool g_core_layout = false;
+bool g_guest_one_core = true;  // Shadow-nx: guest threads on one core (cores.cpp)
 // frame_pacing: "vsync" (default) lets the screen pace the game when vsync is on and the cap is the refresh rate;
 // "timer" also sleeps the title thread to its own 60 Hz grid, as before
 std::string g_frame_pacing = "vsync";
@@ -90,6 +91,7 @@ bool DekoCachedUpload() { return g_dk_cached_upload; }
 uint32_t TextureCheckFrames() { return g_texture_check_frames; }
 bool Smaa() { return g_smaa; }
 bool CoreLayout() { return g_core_layout; }
+bool GuestOneCore() { return g_guest_one_core; }
 }  // namespace host
 
 namespace app {
@@ -119,6 +121,7 @@ toml::table Table() {
                   {"saltynx", g_saltynx},
                   {"profile", g_profile},
                   {"core_layout", g_core_layout},
+                  {"guest_one_core", g_guest_one_core},
                   {"reuse_constants", gpu::g_reuse_constants.load()},
                   {"cpu_mhz", int64_t(host::ClockWanted("cpu"))},
                   {"gpu_mhz", int64_t(host::ClockWanted("gpu"))},
@@ -187,6 +190,7 @@ void Load() {
     g_saltynx = t["saltynx"].value_or(g_saltynx);
     g_profile = t["profile"].value_or(g_profile);
     g_core_layout = t["core_layout"].value_or(g_core_layout);
+    g_guest_one_core = t["guest_one_core"].value_or(g_guest_one_core);
     gpu::g_reuse_constants = t["reuse_constants"].value_or(gpu::g_reuse_constants.load());
     for (const char* c : {"cpu", "gpu", "mem"})
         host::SetClockWanted(c, t[std::string(c) + "_mhz"].value_or(host::ClockWanted(c)));

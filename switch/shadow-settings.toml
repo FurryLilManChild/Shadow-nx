@@ -37,6 +37,9 @@ profile = false
 # false (default): Horizon places the threads. true: the game's main thread gets a CPU core of its own (the render thread
 # another, the rest the third). Measured on the console: no faster than letting Horizon choose.
 core_layout = false
+# true (default): every thread running the game's own code on one CPU core, as the Xbox ran them on its one CPU (the
+# game's threads expect that); the render thread and sound on the other two. false: spread over all three.
+guest_one_core = true
 
 # "vsync" (default): with vsync on and fps_cap 60, the screen paces the game (smoother: a slow frame now and then is
 # hidden by the frames already queued). "timer": the game also waits on its own 60 Hz clock (the older builds).

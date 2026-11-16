@@ -3,6 +3,19 @@
 sheroes-nx's log (the Sonic Heroes port this one starts from) is in `docs/sheroes-nx/progress-log.md`; read it
 first, since most of its problems were in shared code and are already fixed here.
 
+## 2026-11-16 (Switch tests 1 and 2)
+
+- switch-test1: boots from the ISO, menus and FMV fine; in Westopolis Shadow white, surfaces missing and no ground
+  past the first ramp (Shadow falls through). FMV at 20 fps (15 ms a frame uploading the movie texture).
+- Movie skip: Start (Switch +) answers PLAYEND from mwPlyGetStat (0x340CC0); confirmed working in switch-test2.
+- switch-test2 logged every disc read with an FNV hash: all 555 matched the ISO (tools: a checker on Mark's PC), so the
+  data arrives intact. It froze on the stage's loading screen and crashed on guest thread 14 in a RenderWare vector
+  insert (0x2B4010, vector at 0x559E90, memmove of 0x3FFFFFFF dwords: its end lay before the insert point).
+- Theory (not proven): the guest threads share data the x86 way (plain stores and loads, one CPU on the Xbox), and on
+  the Switch's three ARM cores another thread can see those stores out of order. The PC's x86 keeps them in order,
+  which would explain why only the Switch breaks. switch-test3 runs every guest-code thread on core 0
+  (guest_one_core, cores.cpp), the render thread on core 1, other host threads on 2.
+
 ## 2026-11-16 (later): first PC boot, black Shadow and blur
 
 - First PC boot (Vulkan) reached Westopolis with no trap: 58 to 60 fps in the stage, GPU about 5 ms a frame. The

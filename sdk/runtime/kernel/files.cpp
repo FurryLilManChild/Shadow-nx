@@ -724,7 +724,7 @@ static uint32_t Transfer(const Args& a, bool write, uint32_t pages) {
     // Shadow-nx, switch-test2 only (kLogReads): every read of the disc with a hash of what arrived, so the bytes the
     // game got on the Switch can be checked against the disc image itself (2026-11-16: Westopolis' ground and
     // surfaces missing past the first ramp, as if its streamed parts stg0100_NN.one never arrived or arrived wrong)
-    constexpr bool kLogReads = true;
+    constexpr bool kLogReads = false;  // on for switch-test2
     if (kLogReads && !write && !logx::kVerbose) {
         uint32_t hash = 2166136261u;
         for (uint32_t i = 0; i < n; i++) {
