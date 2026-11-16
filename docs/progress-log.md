@@ -3,6 +3,23 @@
 sheroes-nx's log (the Sonic Heroes port this one starts from) is in `docs/sheroes-nx/progress-log.md`; read it
 first, since most of its problems were in shared code and are already fixed here.
 
+## 2026-11-16 (Switch tests 3, 3b, 3c): stuck loading on one core
+
+- switch-test3 (guest threads on core 0): no crash, menus and FMV at 60 fps, but the stage's loading screen never
+  ends (the title fades in and out). Every guest thread logged its move to core 0.
+- 3b (profiler on): guest 14 (the loading screen's thread) at 100 % of core 0, spinning on NtYieldExecution; the
+  nine loader threads started for the stage (guest 34 to 54) never busy.
+- 3c gave every guest thread priority 0x3B on the theory that the loaders were lower priority. Wrong: its log shows
+  the loaders asked for priority 0 (0x3B already) and the title thread 0 to 2. Same hang, same profile. So the
+  loaders are blocked in a wait, not starved, and the profiler cannot say on what (it only samples busy threads).
+- Pitfalls this session: built twice without Mark's go-ahead (a compile check that ran the full build, then test 3);
+  moved the guest threads to one core without checking priorities; the priority theory rested on log lines that
+  were filtered out (LOGI) instead of first making the log show them.
+- Next (not built): a wait-graph watchdog (every guest thread's current kernel wait: object, kind, since when, guest
+  caller chain; every signal: who and when; dumped when loading stalls), and for the three-core corruption a TSO
+  mode (acquire loads and release stores for guest memory, as x86-on-ARM translators do) to test the
+  memory-ordering theory directly. Possibly the SDK's headless Linux harness to reproduce in the cloud.
+
 ## 2026-11-16 (Switch tests 1 and 2)
 
 - switch-test1: boots from the ISO, menus and FMV fine; in Westopolis Shadow white, surfaces missing and no ground
