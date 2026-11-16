@@ -524,6 +524,7 @@ private:
     void ApplySettings();
     void ReadTiming(uint32_t slot);
     void SaveShot(Target& t, Image* shown);
+    void DiagCycle();  // Shadow-nx: switch-test2's settings cycle
     void SyncLocked(uint32_t data);
     void LogPerf();
 
@@ -628,6 +629,8 @@ private:
     uint64_t stage_memo_hits_ = 0, stage_memo_misses_ = 0;
     uint64_t sig_bytes_ = 0, tex_uploads_ = 0, tex_upload_bytes_ = 0;
     uint32_t check_frames_ = 1;
+    uint32_t diag_draws_ = 0;  // Shadow-nx: draws since the last present, for DiagCycle
+    bool quiet_seen_ = false;
     uint64_t gpu_ns_ = 0, gpu_works_ = 0;
     // frame pacing: time between presents; with vsync over 18 ms is a missed refresh the player sees as a hitch
     uint64_t last_present_ns_ = 0, pace_max_ns_ = 0, last_acquire_ns_ = 0, last_reset_ns_ = 0;
@@ -1746,6 +1749,7 @@ void DekoBackend::BindState(const State& s, const Assembled& a, const DrawShader
 
 void DekoBackend::Draw(const State& s, uint32_t prim, uint32_t start, uint32_t count, const uint8_t* indices) {
     DK_GATE();
+    diag_draws_++;
     if (DepthCopy(s)) return;
     uint64_t t = TickNs(), t2;
     auto phase = [&](Phase p) {
@@ -2428,6 +2432,78 @@ void DekoBackend::SaveShot(Target& t, Image* shown) {
     LOGR("screenshot saved: %s", (dir / name).string().c_str());
 }
 
+// Shadow-nx, switch-test2 only (kDiagCycle): on the first stage of the 2026-11-16 Switch test Shadow drew white and
+// level surfaces were missing, while the PC drew them right. This cycles the Switch-only render paths in the stage,
+// 8 s each, and saves a screenshot 5 s into each step (screenshots/ beside the NRO), so one run shows which one
+// draws them right: raw packed vertices (g_packed_strides), native fans and quads (g_native_polygons), textures
+// checked in full only every 8th frame (texture_check_frames), state tracking (headers and blocks sent only when
+// set) and constant reuse. Starts after 2 s of frames with 150 draws or more (a stage), up to 3 times (new stages).
+constexpr bool kDiagCycle = true;
+void DekoBackend::DiagCycle() {
+    struct Step {
+        const char* name;
+        bool packed, native, track, reuse;
+        uint32_t check;  // 0: the setting
+    };
+    static const Step kSteps[] = {
+        {"baseline (switch-test1 settings)", true, true, true, true, 0},
+        {"packed vertices off", false, true, true, true, 0},
+        {"native fans and quads off", true, false, true, true, 0},
+        {"textures checked every frame", true, true, true, true, 1},
+        {"state tracking off", true, true, false, true, 0},
+        {"constant reuse off", true, true, true, false, 0},
+        {"all five off", false, false, false, false, 1},
+        {"baseline again", true, true, true, true, 0},
+    };
+    constexpr uint32_t kStepFrames = 480, kShotAt = 300, kBusyDraws = 150, kBusyFrames = 120, kQuietFrames = 300;
+    static int step = -1, cycles = 0;
+    static uint32_t frames = 0, busy = 0, quiet = 0;
+    static bool track0 = gpu::g_track_state, reuse0 = gpu::g_reuse_constants.load();
+    static uint32_t check0 = check_frames_;
+    uint32_t draws = diag_draws_;
+    diag_draws_ = 0;
+    if (!kDiagCycle) return;
+    auto apply = [&](const Step& st) {
+        gpu::g_packed_strides = st.packed;
+        gpu::g_native_polygons = st.native;
+        gpu::g_track_state = st.track && track0;
+        if (gpu::g_track_state) gpu::TouchAllState();
+        gpu::g_reuse_constants = st.reuse && reuse0;
+        check_frames_ = st.check ? st.check : check0;
+    };
+    if (step < 0) {
+        quiet = draws < 50 ? quiet + 1 : 0;
+        busy = draws >= kBusyDraws ? busy + 1 : 0;
+        if (cycles < 3 && busy >= kBusyFrames && (cycles == 0 || quiet_seen_)) {
+            step = 0;
+            frames = 0;
+            cycles++;
+            quiet_seen_ = false;
+            apply(kSteps[0]);
+            LOGR("diag: cycle %d starts (%u draws a frame)", cycles, draws);
+            LOGR("diag: step 1 of %zu: %s", std::size(kSteps), kSteps[0].name);
+        }
+        if (quiet >= kQuietFrames) quiet_seen_ = true;  // a loading screen or a movie: the next stage may cycle again
+        return;
+    }
+    frames++;
+    if (frames == kShotAt) {
+        gpu::g_screenshot = true;
+        LOGR("diag: screenshot of step %d (%s), %u draws this frame", step + 1, kSteps[step].name, draws);
+    }
+    if (frames < kStepFrames) return;
+    frames = 0;
+    if (++step >= int(std::size(kSteps))) {
+        step = -1;
+        busy = quiet = 0;
+        apply(kSteps[0]);
+        LOGR("diag: cycle %d done, back to the switch-test1 settings", cycles);
+        return;
+    }
+    apply(kSteps[step]);
+    LOGR("diag: step %d of %zu: %s", step + 1, std::size(kSteps), kSteps[step].name);
+}
+
 void DekoBackend::Present(const Surface& front) {
     DK_GATE();
     uint64_t now_ns = TickNs();
@@ -2452,6 +2528,7 @@ void DekoBackend::Present(const Surface& front) {
     if (t && host::Smaa())
         if (Image* aa = Smaa(t->img)) shown = aa;
     if (t && gpu::g_screenshot.exchange(false)) SaveShot(*t, shown);
+    DiagCycle();
     if (ramp_dirty_) UploadGammaRamp();
     EnsureSwapchain();
     // the frame's draws go to the GPU before the acquire, which makes the queue wait for the screen's image: the GPU
