@@ -97,6 +97,8 @@ invert_camera_y = false
 stick_response = 0
 # The frame rate in the top left corner.
 fps_counter = false
+# The 3D scene (drawn at 512x384 on the Xbox) at the full screen height instead: sharper, more GPU time.
+sharp_scene = false
 # Volumes in %: music (stereo sounds) and effects (mono sounds: effects and voices).
 music_volume = 100
 effects_volume = 100

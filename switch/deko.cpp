@@ -614,6 +614,7 @@ private:
     Target* draw_ds_ = nullptr;
     uint32_t guest_w_ = 640, guest_h_ = 480;
     float scale_ = 1.0f;
+    bool sharp_ = false;  // Shadow-nx: app::g_sharp_scene the targets were made with
     Assembled asm_;
     std::unordered_map<uint32_t, Late> late_;
     std::mutex late_lock_;
@@ -643,6 +644,8 @@ uint64_t TickNs() { return armTicksToNs(armGetSystemTick()); }
 bool DekoBackend::Init(uint32_t width, uint32_t height) {
     guest_w_ = width;
     guest_h_ = height;
+    sharp_ = app::g_sharp_scene;  // Shadow-nx: the first ApplySettings logs the scale
+    LOGR("deko3d: sharp scene %s", sharp_ ? "on" : "off");
     dk::SetLog([](const char* line) { LOGR("%s", line); }, [] { logx::Flush(); });
     cache_dir_ = app::ExeDir() / "shadercache";
     vkshader::Init(cache_dir_);
@@ -1214,8 +1217,9 @@ Target* DekoBackend::EnsureTarget(const Surface& s, bool depth) {
     t.depth = depth;
     t.gw = gw;
     t.gh = gh;
-    t.w = std::max(1u, uint32_t(std::lround(gw * scale_)));
-    t.h = std::max(1u, uint32_t(std::lround(gh * scale_)));
+    float sc = app::TargetScale(gw, gh, guest_w_, scale_);  // Shadow-nx: sharp scene
+    t.w = std::max(1u, uint32_t(std::lround(gw * sc)));
+    t.h = std::max(1u, uint32_t(std::lround(gh * sc)));
     if (!CreateImage(t.img, depth ? kDepthFormat : kBgra, t.w, t.h, 1, 1, 1, true)) {
         LOGE("deko3d: no %ux%u target", t.w, t.h);
         return nullptr;
@@ -2381,7 +2385,9 @@ void DekoBackend::ReleaseOldTextures() {
 
 void DekoBackend::ApplySettings() {
     float want = app::RenderScale(guest_h_);
-    if (std::fabs(want - scale_) <= 1e-4f) return;
+    if (std::fabs(want - scale_) <= 1e-4f && sharp_ == app::g_sharp_scene) return;
+    sharp_ = app::g_sharp_scene;
+    LOGR("deko3d: targets remade, render scale %.3f, sharp scene %s", want, sharp_ ? "on" : "off");
     for (auto& [key, t] : targets_) {
         Retire(t.img);
         Retire(t.fb);

@@ -761,6 +761,7 @@ private:
     Target* draw_ds_ = nullptr;
     uint32_t guest_w_ = 640, guest_h_ = 480;
     float scale_ = 1.0f;
+    bool sharp_ = false;  // Shadow-nx: app::g_sharp_scene the targets were made with
     Assembled asm_;
     std::unordered_map<uint32_t, Late> late_;
     std::mutex late_lock_;
@@ -800,8 +801,9 @@ bool VulkanBackend::Init(uint32_t width, uint32_t height) {
     Begin();
     ui_ = InitUi();
     scale_ = app::RenderScale(guest_h_);
-    LOGI("vulkan: %ux%u guest, %ux%u screen, render scale %.3f", width, height, swap_extent_.width,
-         swap_extent_.height, scale_);
+    sharp_ = app::g_sharp_scene;
+    LOGR("vulkan: %ux%u guest, %ux%u screen, render scale %.3f, sharp scene %s", width, height, swap_extent_.width,
+         swap_extent_.height, scale_, sharp_ ? "on" : "off");
     return true;
 }
 
@@ -2058,8 +2060,9 @@ Target* VulkanBackend::EnsureTarget(const Surface& s, bool depth) {
     t.depth = depth;
     t.gw = gw;
     t.gh = gh;
-    t.w = std::max(1u, uint32_t(std::lround(gw * scale_)));
-    t.h = std::max(1u, uint32_t(std::lround(gh * scale_)));
+    float sc = app::TargetScale(gw, gh, guest_w_, scale_);  // Shadow-nx: sharp scene
+    t.w = std::max(1u, uint32_t(std::lround(gw * sc)));
+    t.h = std::max(1u, uint32_t(std::lround(gh * sc)));
     VkImageUsageFlags usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
                               (depth ? VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT : VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
     if (!CreateImage(t.img, depth ? depth_fmt_ : kBgra, t.w, t.h, 1, 1, 1, usage, VK_IMAGE_VIEW_TYPE_2D)) {
@@ -3033,7 +3036,9 @@ void VulkanBackend::ReleaseOldTextures() {
 
 void VulkanBackend::ApplySettings() {
     float want = app::RenderScale(guest_h_);
-    if (std::fabs(want - scale_) <= 1e-4f) return;
+    if (std::fabs(want - scale_) <= 1e-4f && sharp_ == app::g_sharp_scene) return;
+    sharp_ = app::g_sharp_scene;
+    LOGR("vulkan: targets remade, render scale %.3f, sharp scene %s", want, sharp_ ? "on" : "off");
     Submit(true, false);
     for (auto& [key, t] : targets_) {
         Retire(t.img);

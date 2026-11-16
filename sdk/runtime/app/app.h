@@ -39,6 +39,13 @@ struct Mode {
 Mode Desktop();
 Mode Output();
 float RenderScale(uint32_t guest_height);
+// Shadow-nx: a target's render scale. "Sharp scene" (off by default) draws the 512x512 targets Shadow renders its
+// 3D scene and glow into (512x384 used) at the back buffer's size, so the stretch to the screen adds no blur
+inline bool g_sharp_scene = false;  // game option sharp_scene (game_info.cpp), the Switch menu's "Sharp 3D scene"
+inline float TargetScale(uint32_t gw, uint32_t gh, uint32_t guest_w, float scale) {
+    if (g_sharp_scene && gw == 512 && gh == 512 && guest_w > 512) return scale * float(guest_w) / 512.0f;
+    return scale;
+}
 // the output is 3:2 or wider: the console reports a widescreen TV and the frame is shown 16:9, else 4:3 as on a 4:3 TV
 bool Widescreen();
 // the two letters of the host's own language ("es", "en"...), "" if unknown: language = "auto" follows it

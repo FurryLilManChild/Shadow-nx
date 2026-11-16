@@ -697,6 +697,7 @@ private:
     uint32_t bb_w_ = 0;
     uint32_t bb_h_ = 0;
     float scale_ = 1.0f;
+    bool sharp_ = false;  // Shadow-nx: app::g_sharp_scene the targets were made with
     // surfaces locked without a wait: copies in flight, the newest finished one goes to guest memory
     struct Late {
         ComPtr<ID3D12Resource> rb[kFrames];
@@ -962,6 +963,8 @@ void D3D12Backend::CreateGammaLut() {
 
 void D3D12Backend::LoadSettings() {
     scale_ = app::RenderScale(guest_h_);
+    sharp_ = app::g_sharp_scene;  // Shadow-nx
+    LOGR("d3d12: render scale %.3f, sharp scene %s", scale_, sharp_ ? "on" : "off");
     ext_ = g_extension.get();
     if (ext_) {
         ext_->Settings();
@@ -1079,7 +1082,7 @@ void D3D12Backend::ReleaseTarget(std::unordered_map<uint64_t, Target>::iterator 
 
 // the host texture of a new target, at render scale or the extension's
 bool D3D12Backend::CreateTargetResource(Target& t, const Surface& s) {
-    float sc = scale_;
+    float sc = app::TargetScale(t.gw, t.gh, guest_w_, scale_);  // Shadow-nx: sharp scene
     if (ext_) ext_->MakeTarget(s, t.depth, t.gw, t.gh, sc, t.fmt);
     t.w = std::max(1u, uint32_t(std::lround(t.gw * sc)));
     t.h = std::max(1u, uint32_t(std::lround(t.gh * sc)));
@@ -3235,8 +3238,10 @@ void D3D12Backend::Present(const Surface& front) {
 
 void D3D12Backend::ApplySettings() {
     float want = app::RenderScale(guest_h_);
-    bool remake = ext_ && ext_->Settings();
+    bool remake = (ext_ && ext_->Settings()) || sharp_ != app::g_sharp_scene;  // Shadow-nx: sharp scene
     if (std::fabs(want - scale_) > 1e-4f || remake) {
+        sharp_ = app::g_sharp_scene;
+        LOGR("d3d12: targets remade, render scale %.3f, sharp scene %s", want, sharp_ ? "on" : "off");
         Flush();
         for (auto& [key, tg] : targets_) (tg.depth ? free_dsv_ : free_rtv_).push_back(tg.view);
         targets_.clear();

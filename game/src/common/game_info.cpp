@@ -29,6 +29,7 @@ const app::GameInfo app::kGame = {
                 {"invert_camera_y", &shadow::g_invert_y, nullptr},
                 {"fps_counter", &shadow::g_fps_counter, nullptr},
                 {"stick_response", nullptr, &shadow::g_stick_response},
+                {"sharp_scene", &app::g_sharp_scene, nullptr},
                 {"music_volume", nullptr, &xdk::g_music_pct},
                 {"effects_volume", nullptr, &xdk::g_effects_pct}},  // game settings kept in the settings file
     .load = nullptr,                      // reads more from the settings file's toml::table

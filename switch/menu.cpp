@@ -62,7 +62,7 @@ uint8_t g_map[8];  // the map in use
 
 enum Row {
     R_TITLE_CTRL, R_LAYOUT, R_MAP0, R_MAP7 = R_MAP0 + 7, R_INV_X, R_INV_Y, R_STICK, R_CONTROLLERS,
-    R_TITLE_DISP, R_SCALE, R_ANISO, R_SMAA, R_FPS, R_MUSIC, R_EFFECTS, R_BOOST,
+    R_TITLE_DISP, R_SCALE, R_SHARP, R_ANISO, R_SMAA, R_FPS, R_MUSIC, R_EFFECTS, R_BOOST,
     R_DEFAULTS, R_CLOSE, R_COUNT
 };
 int g_sel = R_LAYOUT;
@@ -156,6 +156,11 @@ void RowText(int r, const char*& label, char* val, size_t vn, const char*& note)
             std::snprintf(val, vn, "%u%%", s.render_percent);
             note = "Of the screen's height. Lower is faster";
             break;
+        case R_SHARP:  // Shadow-nx
+            label = "Sharp 3D scene";
+            std::snprintf(val, vn, "%s", app::g_sharp_scene ? "On" : "Off");
+            note = "3D drawn at full screen height. Costs GPU time";
+            break;
         case R_ANISO:
             label = "Texture filtering";
             if (s.aniso) std::snprintf(val, vn, "%ux", s.aniso);
@@ -216,6 +221,7 @@ void Change(int r, int d) {
         case R_INV_Y: shadow::g_invert_y = !shadow::g_invert_y; break;
         case R_STICK: shadow::g_stick_response = uint32_t(Wrap(int(std::min<uint32_t>(shadow::g_stick_response, 2)), d, 3)); break;
         case R_SCALE: s.render_percent = kRenderPct[Wrap(IndexOf(kRenderPct, Count(kRenderPct), s.render_percent), d, Count(kRenderPct))]; break;
+        case R_SHARP: app::g_sharp_scene = !app::g_sharp_scene; break;
         case R_ANISO: s.aniso = kAniso[Wrap(IndexOf(kAniso, Count(kAniso), s.aniso), d, Count(kAniso))]; break;
         case R_SMAA: SetSmaa(!host::Smaa()); break;
         case R_FPS: shadow::g_fps_counter = !shadow::g_fps_counter; break;
@@ -233,6 +239,7 @@ void Defaults() {
     shadow::g_stick_response = 0;
     shadow::g_fps_counter = false;
     s.render_percent = 100;
+    app::g_sharp_scene = false;
     s.aniso = 2;
     SetSmaa(false);
     xdk::g_music_pct = xdk::g_effects_pct = 100;
