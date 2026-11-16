@@ -18,6 +18,8 @@
 // (2026-11-16) crashed in a RenderWare vector (0x559E90, grown at 0x2B4010) whose end lay before its insert point, after
 // streaming Westopolis' parts, every one of which had arrived intact from the disc; switch-test1 lost the ground and
 // surfaces past the first ramp. One core gives the guest threads the console's view of memory.
+extern "C" int shadow_guest_one_core() { return host::GuestOneCore() ? 1 : 0; }
+
 extern "C" void shadow_place_thread(int role) {
     if (role < 0 || role > 3) return;
     const bool one = host::GuestOneCore();

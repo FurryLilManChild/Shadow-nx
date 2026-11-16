@@ -150,14 +150,25 @@ std::vector<ThreadRef> Threads() {
 // Switch's threads. With every thread at 0x3B the main thread could run ahead of FIFA's time critical audio thread,
 // which on the Xbox always ran first: it set a sound channel's volume before the audio thread had made the channel's
 // voice (0x220C48, a call through a null object) whenever a thread was held back (a long frame, the profiler).
+#ifdef __SWITCH__
+extern "C" int shadow_guest_one_core() __attribute__((weak));  // switch/cores.cpp
+#endif
+
 void ApplyPriority(Thread& t) {
 #ifdef __SWITCH__
     uint32_t h = t.host;
     if (!h) return;
     int p = t.priority;
     u32 prio = p >= 16 ? 0x30 : p <= -16 ? 0x3F : u32(0x3B - std::clamp(p, -2, 2));
+    // Shadow-nx: with every guest thread on one core (guest_one_core), all at 0x3B (59). Horizon never runs a lower
+    // priority while a higher one is ready, and shares a core in turns only at 59 (its round robin). switch-test3b's
+    // profile: the title thread (guest 14) ran its loading screen at 100 % of core 0, yielding, while the stage's
+    // nine loader threads never ran and the load never finished. The Xbox's kernel let them through; one level does.
+    const bool flat = shadow_guest_one_core && shadow_guest_one_core();
+    if (flat) prio = 0x3B;
     Result rc = svcSetThreadPriority(Handle(h), prio);
-    LOGI("threads: guest %X priority %d -> %X%s", t.id, p, unsigned(prio), R_FAILED(rc) ? " (refused)" : "");
+    LOGR("threads: guest %X priority %d -> %X%s%s", t.id, p, unsigned(prio), flat ? " (one core: all 3B)" : "",
+         R_FAILED(rc) ? " (refused)" : "");
 #else
     (void)t;
 #endif
