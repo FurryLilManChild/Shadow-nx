@@ -2278,7 +2278,10 @@ VkImageView VulkanBackend::BindTargetTexture(const State& s, int stage, const Te
     Target* rt = draw_rt_;
     float k = float(t.w) / (t.gw * stages.k[stage]);
     bool blur = rt && t.gw < guest_w_ && rt->gw < guest_w_;
-    if (!t.depth && box && k > kUpscaledMin && rt && rt != &t && (blur || t.gw > rt->gw || t.gh > rt->gh)) {
+    // Shadow-nx: shrinking means smaller both ways. Shadow draws its 3D scene into a 512x512 target (512x384 used)
+    // and stretches it over the 640x480 back buffer; taller than the back buffer, it took 3 texel box taps and
+    // the whole picture blurred (PC capture 2026-11-16)
+    if (!t.depth && box && k > kUpscaledMin && rt && rt != &t && (blur || t.gw > rt->gw && t.gh > rt->gh)) {
         stages.wide[stage] = k;
         stages.blur[stage] = blur;
         info.flags |= kTexWide;

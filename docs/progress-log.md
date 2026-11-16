@@ -3,6 +3,23 @@
 sheroes-nx's log (the Sonic Heroes port this one starts from) is in `docs/sheroes-nx/progress-log.md`; read it
 first, since most of its problems were in shared code and are already fixed here.
 
+## 2026-11-16 (later): first PC boot, black Shadow and blur
+
+- First PC boot (Vulkan) reached Westopolis with no trap: 58 to 60 fps in the stage, GPU about 5 ms a frame. The
+  dashboard's widescreen answer (1) gives a real 16:9 picture: the Xbox version supports widescreen.
+- F3 capture (D3D12, out/capture/134315): Shadow draws its 3D scene into a 512x512 target (512x384 used, the game's
+  own 3D resolution on the Xbox), adds a glow chain (512, 128, 64) and stretches the scene over the 640x480 back
+  buffer, then draws the HUD.
+- Blur: the stretch read the scene as a target "shrunk" into the back buffer because it is taller (512 > 480), so
+  each tap became a 3 texel box (kTexWide) and the whole picture smeared. Shrinking now means smaller both ways
+  (d3d12.cpp, vulkan.cpp, deko.cpp).
+- Black Shadow: his skinned program lights oD0 = c95 * (c-91 ambient + light), and RenderWare (0x2C51C0) pushes
+  c-91 and c95 as raw NV097_SET_TRANSFORM_CONSTANT_LOAD / SET_TRANSFORM_CONSTANT commands. Neither the push walker
+  nor EndPush read them: the capture had c-91 = 0 0 0 1. Both now apply them (ApplyConstantMethod), and the
+  SetVertexShaderConstant HLEs walk the push buffer first so the order matches the console. A scan of every
+  immediate the game writes found no other raw state commands besides begin/end and inline vertices.
+  Also for sheroes-nx: the same walker code is there.
+
 ## 2026-11-16: started from sheroes-nx 0.5.0
 
 - Disc: Mark's trimmed XISO, base offset 0 (no video partition), 3,510 files, 2.54 GB. default.xbe taken out of it

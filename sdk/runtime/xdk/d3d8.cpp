@@ -1159,6 +1159,11 @@ HLE_STDCALL(D3DDevice_SetVertexShader, 1) {
 }
 
 HLE_FASTCALL(D3DDevice_SetVertexShaderConstant1Fast, 0) {
+    // Shadow-nx: constants pushed raw before this call land first, as on the console (ApplyConstantMethod)
+    if (Dev(kDevPush) != g_walk) {
+        std::lock_guard<HleLock> lock(g_lock);
+        Walk(Dev(kDevPush));
+    }
     uint32_t reg = a[0];
     gpu::TouchVsc(g_state, reg);
     if (reg < 192) std::memcpy(g_state.vsc[reg].data(), HostPtr(a[1]), 16);
@@ -1166,6 +1171,10 @@ HLE_FASTCALL(D3DDevice_SetVertexShaderConstant1Fast, 0) {
 }
 
 HLE_FASTCALL(D3DDevice_SetVertexShaderConstant1, 0) {
+    if (Dev(kDevPush) != g_walk) {
+        std::lock_guard<HleLock> lock(g_lock);
+        Walk(Dev(kDevPush));
+    }
     uint32_t reg = a[0];
     gpu::TouchVsc(g_state, reg);
     if (reg < 192) std::memcpy(g_state.vsc[reg].data(), HostPtr(a[1]), 16);
@@ -1173,6 +1182,10 @@ HLE_FASTCALL(D3DDevice_SetVertexShaderConstant1, 0) {
 }
 
 HLE_FASTCALL(D3DDevice_SetVertexShaderConstant4, 0) {
+    if (Dev(kDevPush) != g_walk) {
+        std::lock_guard<HleLock> lock(g_lock);
+        Walk(Dev(kDevPush));
+    }
     uint32_t reg = a[0], src = a[1];
     gpu::TouchVsc(g_state, reg, 4);
     for (uint32_t i = 0; i < 4 && reg + i < 192; i++) std::memcpy(g_state.vsc[reg + i].data(), HostPtr(src + i * 16), 16);
@@ -1180,6 +1193,10 @@ HLE_FASTCALL(D3DDevice_SetVertexShaderConstant4, 0) {
 }
 
 HLE_FASTCALL(D3DDevice_SetVertexShaderConstantNotInlineFast, 1) {
+    if (Dev(kDevPush) != g_walk) {
+        std::lock_guard<HleLock> lock(g_lock);
+        Walk(Dev(kDevPush));
+    }
     uint32_t reg = a[0], src = a[1], dwords = a[2];
     gpu::TouchVsc(g_state, reg, dwords / 4);
     for (uint32_t i = 0; i < dwords / 4 && reg + i < 192; i++) std::memcpy(g_state.vsc[reg + i].data(), HostPtr(src + i * 16), 16);
@@ -1443,6 +1460,27 @@ void ApplyVisibilityMethod(uint32_t m, uint32_t v) {
     if (m == gpu::kMGetReport) g_backend->GetReport(mem::VirtualFromPhysical(v & kReportAddressMask));
 }
 
+// Shadow-nx: vertex constants pushed as raw commands. RenderWare's Xbox driver in Shadow the Hedgehog (0x2C51C0)
+// writes NV097_SET_TRANSFORM_CONSTANT_LOAD (0x1EA4) and NV097_SET_TRANSFORM_CONSTANT (0x0B80, 32 dwords) straight
+// into the push buffer for the skinned characters' ambient (register 5, c-91) and material colour (register 0xBF,
+// c95). Unread they stayed 0 and Shadow drew black (PC capture 2026-11-16: c-91 = 0 0 0 1, oD0 = c95 * light).
+// The load sets the register; every 4 data dwords fill it and move to the next one, whatever the method offset.
+uint32_t g_const_reg = 0, g_const_comp = 0;
+bool ApplyConstantMethod(uint32_t m, uint32_t v) {
+    if (m == 0x1EA4) {
+        g_const_reg = v;
+        g_const_comp = 0;
+        return true;
+    }
+    if (m < 0x0B80 || m >= 0x0C00) return false;
+    if (g_const_reg < 192) {
+        gpu::TouchVsc(g_state, g_const_reg);
+        std::memcpy(&g_state.vsc[g_const_reg][g_const_comp], &v, 4);
+    }
+    if (++g_const_comp == 4) g_const_comp = 0, g_const_reg++;
+    return true;
+}
+
 // draws the open primitive: the slots it wrote are FLOAT4 inputs of the bound program, or of the fixed pipeline
 void EndPrimitive() {
     struct Made {
@@ -1508,6 +1546,7 @@ void Walk(uint32_t end) {
             bool last = true;  // the slot's last component
             std::memcpy(&f, &v, 4);
             ApplyVisibilityMethod(m, v);
+            if (ApplyConstantMethod(m, v)) continue;  // Shadow-nx
             if (m == 0x1818) {
                 if (g_im_prim) g_im_inline.push_back(v);
                 continue;
@@ -1586,6 +1625,7 @@ HLE_STDCALL(D3DDevice_EndPush, 1) {
         for (uint32_t i = 0; i < n; i++, p += 4) {
             uint32_t m = head & 0x40000000 ? method : method + i * 4, v = R32(p);
             ApplyVisibilityMethod(m, v);
+            if (ApplyConstantMethod(m, v)) continue;  // Shadow-nx
             if (m == kInlineArray) {
                 if (prim) vertices.push_back(v);
             } else if (m != kBeginEnd) {

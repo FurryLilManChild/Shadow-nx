@@ -1683,7 +1683,10 @@ ID3D12Resource* D3D12Backend::BindTargetTexture(const State& s, int stage, const
     // a pass shrinking it averages each tap over a console texel, else upscaled taps skip texels and ghost
     Target* rt = FindTarget(s.rt, false);
     float k = float(t.w) / (t.gw * stages.k[stage]);
-    if (!t.depth && box && k > kUpscaledMin && rt && rt != &t && (t.gw > rt->gw || t.gh > rt->gh)) {
+    // Shadow-nx: shrinking means smaller both ways. Shadow draws its 3D scene into a 512x512 target (512x384 used)
+    // and stretches it over the 640x480 back buffer; taller than the back buffer, it took 3 texel box taps and
+    // the whole picture blurred (PC capture 2026-11-16)
+    if (!t.depth && box && k > kUpscaledMin && rt && rt != &t && (t.gw > rt->gw && t.gh > rt->gh)) {
         stages.wide[stage] = k;
         info.flags |= kTexWide;
     }
