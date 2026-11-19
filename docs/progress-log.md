@@ -3,6 +3,26 @@
 sheroes-nx's log (the Sonic Heroes port this one starts from) is in `docs/sheroes-nx/progress-log.md`; read it
 first, since most of its problems were in shared code and are already fixed here.
 
+## 2026-11-19 (Switch test 5 results, test 6 build): the stage piece thread that never started
+
+- PC (reference) and Switch logs line up thread for thread through the stage load (threads 34 to 58 all made,
+  started, finished on both). While playing, Westopolis streams its pieces: thread 14 makes a thread per piece
+  (5C for stg0100_02.one, 6C for _19, 7C for _22). On the PC 5C starts at once and reads _02. On the Switch 5C is
+  created at 45.3 s and never starts (no start line, never in the wait monitor), _02 is never read and the game
+  never asks for _19 or _22: the ground past the first ramp.
+- Cause in our code: on the Switch every host thread has a 64 MB stack and an ended thread kept it (no detach in
+  libnx, stubs.cpp), and Spawn ignored pthread_create's result. 19 threads in, about 1.2 GB of stacks. Windows only
+  commits stack as used and frees it at thread end: the PC never noticed. (Not yet proven that pthread_create
+  failed; test 6 logs it.)
+- Correction: test 4's "thread 58 never created" in the hung runs came from the wait monitor, which only lists
+  threads that ran guest code. Likely the same failure one thread earlier; recheck after the fix.
+
+Test 6 build: a host thread marks itself done as its last step and the next Spawn joins it (libnx's thread join
+waits, closes the thread and frees its stack); pthread_create's result is checked, retried once after a join pass,
+and a failure is logged with the heap; heap and host thread counts in the log at every guest thread start and
+every perf report; each guest thread's deepest stack use (stack painted at start, scanned at exit); the render
+cycle off (kDiagCycle). This belongs in sheroes-nx too.
+
 ## 2026-11-19 (Switch test 4 results, test 5 build): the stage load pipeline
 
 Test 4 (diagnostic build 3b9b903), five runs mapped from their own log lines:

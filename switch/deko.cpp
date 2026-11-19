@@ -2438,7 +2438,7 @@ void DekoBackend::SaveShot(Target& t, Image* shown) {
 // draws them right: raw packed vertices (g_packed_strides), native fans and quads (g_native_polygons), textures
 // checked in full only every 8th frame (texture_check_frames), state tracking (headers and blocks sent only when
 // set) and constant reuse. Starts after 2 s of frames with 150 draws or more (a stage), up to 3 times (new stages).
-constexpr bool kDiagCycle = true;  // switch-test2 (never reached a stage) and switch-test4
+constexpr bool kDiagCycle = false;  // on for switch-test2 and switch-test4 (answered: no step changed the stage)
 void DekoBackend::DiagCycle() {
     struct Step {
         const char* name;
@@ -2592,6 +2592,7 @@ void DekoBackend::LogPerf() {
     gpu_ns_ = gpu_works_ = 0;
     LOGR("perf: %.1f fps, screen %ux%u, guest %ux%u, render scale %.3f (deko3d)", n / secs, swap_w_, swap_h_, guest_w_,
          guest_h_, scale_);
+    LOGR("memory: %s", kernel::HostMemoryText().c_str());  // Shadow-nx, switch-test6
     LOGR("perf: pacing: %u of %.0f frames over 18 ms, %u over 25 ms, %u over 34 ms, longest %.1f ms", pace_late_[0], n,
          pace_late_[1], pace_late_[2], double(pace_max_ns_) / 1e6);
     pace_late_[0] = pace_late_[1] = pace_late_[2] = 0;

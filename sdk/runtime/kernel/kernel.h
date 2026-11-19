@@ -178,6 +178,8 @@ ThreadRef CreateThread(uint32_t stack_size, uint32_t tls_size, uint32_t system_r
                        uint32_t start_context, bool suspended);
 void StartThread(ThreadRef t);
 [[noreturn]] void ExitThread(uint32_t code);
+// Shadow-nx, switch-test6: the Switch's heap and host threads in one line for the log (empty elsewhere)
+std::string HostMemoryText();
 void Resume(Thread& t);
 uint32_t Suspend(Thread& t);  // previous count; another thread stops at its next kernel wait, delay or yield
 void SuspendPoint();           // blocks the current thread while it is suspended

@@ -14,12 +14,80 @@
 #include <pthread.h>
 #endif
 #ifdef __SWITCH__
+#include <malloc.h>
+#include <unistd.h>
 #include <switch.h>
+
+#include <cstring>
+#include <thread>
+extern "C" char* fake_heap_end;  // libnx: the end of newlib's heap
 #endif
 
 namespace kernel {
 
 namespace {
+
+#ifdef __SWITCH__
+// Shadow-nx, switch-test6: host threads give their stacks back. libnx has no detach, so a thread that ended kept its
+// 64 MB stack until the process quit (stubs.cpp). Shadow makes a thread for every stage piece it streams in;
+// switch-test5 created thread 5C (stg0100_02.one, the ground past Westopolis' first ramp) 19 threads in, and it never
+// started: no memory left for its stack. A thread that ends now says so as its very last step, and the next Spawn
+// joins it, which frees its stack and handle.
+std::mutex g_done_lock;
+std::vector<pthread_t> g_done;
+std::atomic<uint32_t> g_live{0}, g_spawned{0}, g_reaped{0};
+std::atomic<size_t> g_stack_max{0};
+
+void HostThreadDone() {
+    std::lock_guard<std::mutex> lock(g_done_lock);
+    g_done.push_back(pthread_self());
+}
+
+void Reap() {
+    std::vector<pthread_t> done;
+    {
+        std::lock_guard<std::mutex> lock(g_done_lock);
+        done.swap(g_done);
+    }
+    for (pthread_t th : done) {
+        pthread_join(th, nullptr);
+        g_reaped++;
+        g_live--;
+    }
+}
+
+// Shadow-nx, switch-test6: how deep each guest thread's stack really goes, to size stacks from data later. The
+// stack is filled with a pattern when the thread starts; at its end the first changed word from the bottom up is
+// the deepest point it reached.
+constexpr uint64_t kPaint = 0xCDCDCDCDCDCDCDCDull;
+thread_local uint8_t* t_stack_lo = nullptr;
+thread_local size_t t_stack_sz = 0;
+
+void PaintStack() {
+    ::Thread* self = threadGetSelf();
+    if (!self || !self->stack_mirror || !self->stack_sz) return;
+    uint8_t* lo = static_cast<uint8_t*>(self->stack_mirror);
+    uint8_t* sp = static_cast<uint8_t*>(__builtin_frame_address(0));
+    if (sp < lo + 0x10000 || sp > lo + self->stack_sz) return;  // not on the stack libnx reports: measure nothing
+    std::memset(lo, 0xCD, size_t(sp - 0x2000 - lo));
+    t_stack_lo = lo;
+    t_stack_sz = self->stack_sz;
+}
+
+size_t StackUsed() {
+    if (!t_stack_lo) return 0;
+    const uint64_t* p = reinterpret_cast<const uint64_t*>(t_stack_lo);
+    size_t n = t_stack_sz / 8, i = 0;
+    while (i < n && p[i] == kPaint) i++;
+    size_t used = t_stack_sz - i * 8;
+    size_t prev = g_stack_max.load();
+    while (used > prev && !g_stack_max.compare_exchange_weak(prev, used)) {
+    }
+    return used;
+}
+#else
+size_t StackUsed() { return 0; }
+#endif
 
 thread_local ThreadRef t_current;
 std::mutex g_threads_lock;
@@ -121,6 +189,36 @@ void Spawn(std::function<void()> fn) {
     };
     HANDLE h = ::CreateThread(nullptr, 64u << 20, entry, f, STACK_SIZE_PARAM_IS_A_RESERVATION, nullptr);
     if (h) ::CloseHandle(h);
+#elif defined(__SWITCH__)
+    Reap();
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setstacksize(&attr, 64u << 20);
+    auto entry = [](void* p) -> void* {
+        PaintStack();
+        {
+            std::unique_ptr<std::function<void()>> g(static_cast<std::function<void()>*>(p));
+            (*g)();
+        }
+        HostThreadDone();  // the very last step: the next Spawn joins this thread and frees its stack
+        return nullptr;
+    };
+    pthread_t th;
+    int rc = pthread_create(&th, &attr, entry, f);
+    if (rc != 0) {
+        LOGR("threads: could not start a host thread (error %d), retrying; %s", rc, HostMemoryText().c_str());
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        Reap();
+        rc = pthread_create(&th, &attr, entry, f);
+    }
+    if (rc != 0) {
+        LOGR("threads: FAILED to start a host thread (error %d); %s", rc, HostMemoryText().c_str());
+        delete f;
+    } else {
+        g_live++;
+        g_spawned++;
+    }
+    pthread_attr_destroy(&attr);
 #else
     pthread_attr_t attr;
     pthread_attr_init(&attr);
@@ -137,6 +235,22 @@ void Spawn(std::function<void()> fn) {
 }
 
 }  // namespace
+
+std::string HostMemoryText() {
+#ifdef __SWITCH__
+    struct mallinfo mi = mallinfo();
+    size_t unclaimed = size_t(fake_heap_end - static_cast<char*>(sbrk(0)));
+    char b[256];
+    std::snprintf(b, sizeof b,
+                  "heap %zu MB used, %zu MB free inside, %zu MB unclaimed; host threads %u running, %u started, %u "
+                  "freed; deepest guest stack %zu KB",
+                  size_t(mi.uordblks) >> 20, size_t(mi.fordblks) >> 20, unclaimed >> 20, g_live.load(),
+                  g_spawned.load(), g_reaped.load(), g_stack_max.load() >> 10);
+    return b;
+#else
+    return {};
+#endif
+}
 
 Thread* Current() { return t_current.get(); }
 ThreadRef CurrentRef() { return t_current; }
@@ -216,6 +330,9 @@ void StartThread(ThreadRef t) {
             si = g_start[t.get()];
             g_start.erase(t.get());
         }
+#ifdef __SWITCH__
+        LOGR("memory: %s", HostMemoryText().c_str());
+#endif
         LOGR("trace: thread %X starts at %08X (%08X, %08X)", t->id, si.system_routine ? si.system_routine : si.start_routine,
              si.start_routine, si.start_context);
         uint32_t code;
@@ -223,7 +340,7 @@ void StartThread(ThreadRef t) {
             code = CallGuest(ctx, si.system_routine, {si.start_routine, si.start_context});
         else
             code = CallGuest(ctx, si.start_routine, {si.start_context});
-        LOGR("trace: thread %X returned %08X", t->id, code);
+        LOGR("trace: thread %X returned %08X; stack used %zu KB", t->id, code, StackUsed() >> 10);
         waitmon::Exited(code);
         MarkExited(*t, code);
         Unregister(t.get());
@@ -251,8 +368,8 @@ void ExitThread(uint32_t code) {
     Thread* t = Current();
     if (t) {
         X86Context* c = t->ctx;
-        LOGR("trace: thread %X exits with %08X%s%s", t->id, code, c ? "; from " : "",
-             c ? waitmon::CallerChain(*c).c_str() : "");
+        LOGR("trace: thread %X exits with %08X; stack used %zu KB%s%s", t->id, code, StackUsed() >> 10,
+             c ? "; from " : "", c ? waitmon::CallerChain(*c).c_str() : "");
         waitmon::Exited(code);
         MarkExited(*t, code);
         Unregister(t);
@@ -261,6 +378,9 @@ void ExitThread(uint32_t code) {
 #ifdef _WIN32
     ::ExitThread(code);
 #else
+#ifdef __SWITCH__
+    HostThreadDone();  // the very last step: the next Spawn joins this thread and frees its stack
+#endif
     pthread_exit(nullptr);
 #endif
 }
