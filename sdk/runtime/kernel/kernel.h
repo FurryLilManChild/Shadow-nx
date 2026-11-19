@@ -117,14 +117,17 @@ struct Object {
     std::atomic<uint32_t> last_signal_thread{0};
     const char* last_signal_how = nullptr;
     std::atomic<uint32_t> signal_count{0};
-    explicit Object(ObjType t) : type(t) {}
-    virtual ~Object() = default;
+    explicit Object(ObjType t) : type(t) { live++; }
+    virtual ~Object() { live--; }
+    inline static std::atomic<int64_t> live{0};  // Shadow-nx, switch-test10: kernel objects alive, for the log
 };
 using ObjectRef = std::shared_ptr<Object>;
 
 uint32_t NewHandle(ObjectRef obj);
 ObjectRef FromHandle(uint32_t handle);
 bool CloseHandle(uint32_t handle);
+size_t HandleCount();  // Shadow-nx, switch-test10
+std::string KernelCountsText();  // handles, objects, system arena, on demand backings (threads.cpp)
 uint32_t DuplicateHandle(uint32_t handle);
 ObjectRef FromPointer(uint32_t guest);  // dispatcher object in guest memory, created on first use
 void Bind(ObjectRef obj, uint32_t guest);
@@ -177,6 +180,9 @@ X86Context& CurrentContext();
 ThreadRef CreateThread(uint32_t stack_size, uint32_t tls_size, uint32_t system_routine, uint32_t start_routine,
                        uint32_t start_context, bool suspended);
 void StartThread(ThreadRef t);
+// Shadow-nx, switch-test10: at boot, 2000 host threads made and ended and 2000 guest stacks taken and freed, with
+// the memory before and after in the log: a leak in either shows in seconds, not after a stage (Switch only)
+void HostSelfTest();
 [[noreturn]] void ExitThread(uint32_t code);
 // Shadow-nx, switch-test6: the Switch's heap and host threads in one line for the log (empty elsewhere)
 std::string HostMemoryText();

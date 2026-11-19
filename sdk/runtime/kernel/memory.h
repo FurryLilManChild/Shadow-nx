@@ -44,7 +44,9 @@ void FreeSystem(uint32_t va);
 
 uint32_t AllocStack(uint32_t size);  // returns the top, guard below the bottom
 void FreeStack(uint32_t top);
-uint32_t StacksInUse(uint32_t* bytes = nullptr);  // Shadow-nx, switch-test9: guest stacks allocated now
+uint32_t StacksInUse(uint32_t* bytes = nullptr);
+uint32_t SystemInUse();      // Shadow-nx, switch-test10: bytes allocated in the system arena (pool, thread blocks)
+uint32_t BackedOnDemand();   // granule runs backed past the arenas (code memory objects, few in the system)  // Shadow-nx, switch-test9: guest stacks allocated now
 
 uint32_t PhysicalFromVirtual(uint32_t va);
 uint32_t VirtualFromPhysical(uint32_t pa);

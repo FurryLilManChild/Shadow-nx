@@ -49,6 +49,11 @@ ObjectRef FromHandle(uint32_t handle) {
     return it == g_handles.end() ? nullptr : it->second;
 }
 
+size_t HandleCount() {
+    std::lock_guard<std::mutex> lock(g_handles_lock);
+    return g_handles.size();
+}
+
 bool CloseHandle(uint32_t handle) {
     std::lock_guard<std::mutex> lock(g_handles_lock);
     return g_handles.erase(handle) != 0;

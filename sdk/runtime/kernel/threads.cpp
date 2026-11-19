@@ -33,27 +33,66 @@ namespace {
 // switch-test5 created thread 5C (stg0100_02.one, the ground past Westopolis' first ramp) 19 threads in, and it never
 // started: no memory left for its stack. A thread that ends now says so as its very last step, and the next Spawn
 // joins it, which frees its stack and handle.
+// Shadow-nx, switch-test10: the stacks themselves are pooled. Freed to the heap, a 64 MB stack was soon split by
+// small allocations and the next thread took a fresh 64 MB from the top: switch-test9 had 2 GB free in pieces and
+// 14 MB unclaimed at 597 s, and threads could no longer start (error 12). Threads are made with libnx directly on a
+// stack from this pool; a joined thread's stack goes back to the pool, never to the heap. The pool grows to the
+// most threads alive at once.
+constexpr size_t kHostStack = 64u << 20;
+struct HostThread {
+    ::Thread t{};
+    void* mem = nullptr;
+    std::function<void()>* fn = nullptr;
+};
 std::mutex g_done_lock;
-std::vector<pthread_t> g_done;
-std::atomic<uint32_t> g_live{0}, g_spawned{0}, g_reaped{0};
+std::vector<HostThread*> g_done;
+std::vector<void*> g_free_stacks;  // under g_done_lock
+std::atomic<uint32_t> g_live{0}, g_spawned{0}, g_reaped{0}, g_pool{0};
 std::atomic<size_t> g_stack_max{0};
+thread_local HostThread* t_host = nullptr;
 
 void HostThreadDone() {
+    if (!t_host) return;
     std::lock_guard<std::mutex> lock(g_done_lock);
-    g_done.push_back(pthread_self());
+    g_done.push_back(t_host);
 }
 
 void Reap() {
-    std::vector<pthread_t> done;
+    std::vector<HostThread*> done;
     {
         std::lock_guard<std::mutex> lock(g_done_lock);
         done.swap(g_done);
     }
-    for (pthread_t th : done) {
-        pthread_join(th, nullptr);
+    for (HostThread* h : done) {
+        threadWaitForExit(&h->t);
+        threadClose(&h->t);
+        {
+            std::lock_guard<std::mutex> lock(g_done_lock);
+            g_free_stacks.push_back(h->mem);
+        }
+        delete h;
         g_reaped++;
         g_live--;
     }
+}
+
+void* TakeStack() {
+    {
+        std::lock_guard<std::mutex> lock(g_done_lock);
+        if (!g_free_stacks.empty()) {
+            void* m = g_free_stacks.back();
+            g_free_stacks.pop_back();
+            return m;
+        }
+    }
+    void* m = memalign(0x1000, kHostStack);
+    if (m) g_pool++;
+    return m;
+}
+
+void GiveBackStack(void* m) {
+    std::lock_guard<std::mutex> lock(g_done_lock);
+    g_free_stacks.push_back(m);
 }
 
 // Shadow-nx, switch-test6: how deep each guest thread's stack really goes, to size stacks from data later. The
@@ -194,34 +233,45 @@ void Spawn(std::function<void()> fn) {
     if (h) ::CloseHandle(h);
 #elif defined(__SWITCH__)
     Reap();
-    pthread_attr_t attr;
-    pthread_attr_init(&attr);
-    pthread_attr_setstacksize(&attr, 64u << 20);
-    auto entry = [](void* p) -> void* {
+    auto entry = [](void* p) {
+        auto* h = static_cast<HostThread*>(p);
+        t_host = h;
         PaintStack();
         {
-            std::unique_ptr<std::function<void()>> g(static_cast<std::function<void()>*>(p));
+            std::unique_ptr<std::function<void()>> g(h->fn);
+            h->fn = nullptr;
             (*g)();
         }
-        HostThreadDone();  // the very last step: the next Spawn joins this thread and frees its stack
-        return nullptr;
-    };
-    pthread_t th;
-    int rc = pthread_create(&th, &attr, entry, f);
-    if (rc != 0) {
-        LOGR("threads: could not start a host thread (error %d), retrying; %s", rc, HostMemoryText().c_str());
+        HostThreadDone();  // the very last step: the next Spawn joins this thread and pools its stack
+    };  // returning ends the thread (libnx calls threadExit)
+    Result rc = 0;
+    for (int attempt = 0; attempt < 2; attempt++) {
+        auto* h = new HostThread;
+        h->fn = f;
+        h->mem = TakeStack();
+        rc = h->mem ? threadCreate(&h->t, entry, h, h->mem, kHostStack, 0x3B, -2)
+                    : MAKERESULT(Module_Libnx, LibnxError_OutOfMemory);
+        if (R_SUCCEEDED(rc)) {
+            // as libnx's pthread_create: any core of the process's
+            u64 mask = 0;
+            if (R_SUCCEEDED(svcGetInfo(&mask, InfoType_CoreMask, CUR_PROCESS_HANDLE, 0)))
+                svcSetThreadCoreMask(h->t.handle, -1, u32(mask));
+            rc = threadStart(&h->t);
+            if (R_FAILED(rc)) threadClose(&h->t);
+        }
+        if (R_SUCCEEDED(rc)) {
+            g_live++;
+            g_spawned++;
+            return;
+        }
+        if (h->mem) GiveBackStack(h->mem);
+        delete h;
+        LOGR("threads: %s a host thread (result 0x%X)%s; %s", attempt ? "FAILED to start" : "could not start",
+             unsigned(rc), attempt ? "" : ", retrying", HostMemoryText().c_str());
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
         Reap();
-        rc = pthread_create(&th, &attr, entry, f);
     }
-    if (rc != 0) {
-        LOGR("threads: FAILED to start a host thread (error %d); %s", rc, HostMemoryText().c_str());
-        delete f;
-    } else {
-        g_live++;
-        g_spawned++;
-    }
-    pthread_attr_destroy(&attr);
+    delete f;
 #else
     pthread_attr_t attr;
     pthread_attr_init(&attr);
@@ -239,17 +289,70 @@ void Spawn(std::function<void()> fn) {
 
 }  // namespace
 
+void HostSelfTest() {
+#ifdef __SWITCH__
+    using Clock = std::chrono::steady_clock;
+    auto unclaimed = [] { return size_t(fake_heap_end - static_cast<char*>(sbrk(0))); };
+    LOGR("selftest: before: %s", HostMemoryText().c_str());
+    const auto t0 = Clock::now();
+    const uint32_t live0 = g_live.load(), pool0 = g_pool.load();
+    const size_t free0 = unclaimed();
+    std::atomic<int> ran{0};
+    constexpr int kThreads = 2000, kStacks = 2000;
+    for (int i = 0; i < kThreads; i++) {
+        Spawn([&ran] { ran++; });
+        for (int k = 0; k < 5000 && g_live.load() > live0 + 4; k++) {
+            std::this_thread::sleep_for(std::chrono::microseconds(200));
+            Reap();
+        }
+    }
+    for (int k = 0; k < 5000 && g_live.load() > live0; k++) {
+        std::this_thread::sleep_for(std::chrono::microseconds(200));
+        Reap();
+    }
+    const uint32_t pool_grew = g_pool.load() - pool0;
+    uint32_t stack_bytes0 = 0, stacks0 = mem::StacksInUse(&stack_bytes0);
+    int stack_fails = 0;
+    for (int i = 0; i < kStacks; i++) {
+        uint32_t top = mem::AllocStack(0x10000 + 0x100 + 0x1000);
+        if (!top) {
+            stack_fails++;
+            break;
+        }
+        mem::FreeStack(top);
+    }
+    uint32_t stack_bytes1 = 0, stacks1 = mem::StacksInUse(&stack_bytes1);
+    const size_t free1 = unclaimed();
+    const size_t drop = free0 > free1 ? free0 - free1 : 0;
+    const bool ok = ran.load() == kThreads && g_live.load() == live0 && pool_grew <= 6 &&
+                    drop <= size_t(pool_grew) * kHostStack + (16u << 20) && !stack_fails && stacks1 == stacks0;
+    LOGR("selftest: %s in %.2f s: %d of %d host threads ran, %u still running (%u before), stack pool grew by %u, "
+         "unclaimed heap down %zu MB; %d guest stacks taken and freed, %u in use after (%u before)%s",
+         ok ? "PASSED" : "FAILED", std::chrono::duration<double>(Clock::now() - t0).count(), ran.load(), kThreads,
+         g_live.load(), live0, pool_grew, drop >> 20, kStacks - stack_fails, stacks1, stacks0,
+         stack_fails ? ", a guest stack could not be taken" : "");
+    LOGR("selftest: after: %s", HostMemoryText().c_str());
+#endif
+}
+
+std::string KernelCountsText() {
+    char b[160];
+    std::snprintf(b, sizeof b, "handles %zu, kernel objects %lld, system arena %u KB, backed on demand %u",
+                  HandleCount(), (long long)Object::live.load(), mem::SystemInUse() >> 10, mem::BackedOnDemand());
+    return b;
+}
+
 std::string HostMemoryText() {
 #ifdef __SWITCH__
     struct mallinfo mi = mallinfo();
     uint32_t stack_bytes = 0, stacks = mem::StacksInUse(&stack_bytes);
     size_t unclaimed = size_t(fake_heap_end - static_cast<char*>(sbrk(0)));
-    char b[256];
+    char b[512];
     std::snprintf(b, sizeof b,
                   "heap %zu MB used, %zu MB free inside, %zu MB unclaimed; host threads %u running, %u started, %u "
-                  "freed; deepest guest stack %zu KB; guest stacks %u (%u KB)",
+                  "freed, %u stacks pooled; guest stacks %u (%u KB); %s",
                   size_t(mi.uordblks) >> 20, size_t(mi.fordblks) >> 20, unclaimed >> 20, g_live.load(),
-                  g_spawned.load(), g_reaped.load(), g_stack_max.load() >> 10, stacks, stack_bytes >> 10);
+                  g_spawned.load(), g_reaped.load(), g_pool.load(), stacks, stack_bytes >> 10, KernelCountsText().c_str());
     return b;
 #else
     return {};
@@ -388,9 +491,11 @@ void ExitThread(uint32_t code) {
     ::ExitThread(code);
 #else
 #ifdef __SWITCH__
-    HostThreadDone();  // the very last step: the next Spawn joins this thread and frees its stack
-#endif
+    HostThreadDone();  // the very last step: the next Spawn joins this thread and pools its stack
+    threadExit();
+#else
     pthread_exit(nullptr);
+#endif
 #endif
 }
 

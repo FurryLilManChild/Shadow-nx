@@ -713,9 +713,10 @@ static uint32_t Transfer(const Args& a, bool write, uint32_t pages) {
         uint32_t chunk = pages ? std::min(len - n, 0x1000 - n % 0x1000) : len - n;
 #ifdef __SWITCH__
         // guest memory is code memory here, which the file system's IPC refuses as a buffer: through the heap
-        static thread_local std::vector<uint8_t> bounce;
+        // Shadow-nx, switch-test10: per call, not thread_local: libnx runs no thread_local destructors when a thread
+        // ends, and the title makes a thread for every stage piece it reads (each kept up to 1 MB here)
         chunk = std::min<uint32_t>(chunk, 1u << 20);
-        bounce.resize(chunk);
+        std::vector<uint8_t> bounce(chunk);
         if (write) std::memcpy(bounce.data(), HostPtr(at), chunk);
         size_t done = f->entry ? MountedDisc()->Read(*f->entry, pos + n, bounce.data(), chunk)
                       : write  ? std::fwrite(bounce.data(), 1, chunk, f->fp)

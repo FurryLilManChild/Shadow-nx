@@ -40,6 +40,9 @@ static bool InPhysical(uint32_t va) {
 static constexpr uint32_t kNxGranule = 1u << 20;
 static std::vector<uint8_t> g_nx_backed((1ull << 32) / kNxGranule, 0);
 
+static uint32_t g_on_demand = 0;
+static bool g_arenas_done = false;
+
 static bool NxBack(uint32_t va, uint32_t size) {
     uint64_t first = va & ~uint64_t(kNxGranule - 1);
     uint64_t end = (uint64_t(va) + size + kNxGranule - 1) & ~uint64_t(kNxGranule - 1);
@@ -62,6 +65,10 @@ static bool NxBack(uint32_t va, uint32_t size) {
         }
         std::memset(g_base + g, 0, len);
         for (uint64_t k = g; k < run; k += kNxGranule) g_nx_backed[size_t(k / kNxGranule)] = 1;
+        if (g_arenas_done) {  // Shadow-nx, switch-test10: each one is a code memory object, and they run out
+            g_on_demand++;
+            LOGR("memory: backed %08X+%X on demand (%u so far)", uint32_t(g), uint32_t(len), g_on_demand);
+        }
         g = run - kNxGranule;
     }
     return true;
@@ -88,6 +95,7 @@ bool Init() {
     };
     for (auto& r : kArenas)
         if (g_base && !NxBack(r[0], r[1])) g_base = nullptr;
+    g_arenas_done = true;
 #elif defined(_WIN32)
     HANDLE ram = CreateFileMappingW(INVALID_HANDLE_VALUE, nullptr, PAGE_READWRITE, 0, kPhysicalSize, nullptr);
     // a fixed base keeps crash dumps comparable between runs
@@ -258,6 +266,11 @@ public:
     }
 
     void Forget(uint32_t a) { used_.erase(a); }
+    uint32_t UsedBytes() const {
+        uint64_t b = 0;
+        for (auto& [a, n] : used_) b += n;
+        return uint32_t(std::min<uint64_t>(b, 0xFFFFFFFFu));
+    }
 
     uint32_t SizeOf(uint32_t a) const {
         auto it = used_.find(a);
@@ -464,6 +477,19 @@ uint32_t AllocStack(uint32_t size) {
     Commit(a + 0x10000, size);
     g_stack_tops[a + 0x10000 + size] = a;
     return a + 0x10000 + size;
+}
+
+uint32_t SystemInUse() {
+    std::lock_guard<std::recursive_mutex> lock(g_lock);
+    return g_system.UsedBytes();
+}
+
+uint32_t BackedOnDemand() {
+#ifdef __SWITCH__
+    return g_on_demand;
+#else
+    return 0;
+#endif
 }
 
 uint32_t StacksInUse(uint32_t* bytes) {

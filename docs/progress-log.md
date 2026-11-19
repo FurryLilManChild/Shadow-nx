@@ -3,6 +3,20 @@
 sheroes-nx's log (the Sonic Heroes port this one starts from) is in `docs/sheroes-nx/progress-log.md`; read it
 first, since most of its problems were in shared code and are already fixed here.
 
+## 2026-11-19 (Switch test 9 results, test 10 build): host stacks fragment the heap
+
+- Test 9: the guest stacks stayed at 7 to 9 for the whole run; Westopolis and the next stage played; the loading
+  screen after that stalled at 597 s: "could not start a host thread (error 12)" with 2035 MB free inside the heap
+  and 14 MB unclaimed. Each freed 64 MB host stack was split by small allocations and the next thread took a fresh
+  64 MB from the top (unclaimed 2748 MB at boot, falling 64 MB every few threads).
+- The pattern (one leak per stage): every leak so far was in thread churn, which runs hundreds of times a stage.
+
+Test 10 build: host threads made with libnx's threadCreate on stacks from a pool that never goes back to the heap
+(the pool grows to the most threads alive at once); ExitThread ends with threadExit; the read bounce buffer per
+call (libnx runs no thread_local destructors); a boot self test (2000 host threads, 2000 guest stacks, memory
+before and after, PASSED or FAILED); handles, kernel objects, system arena use and on demand backings in every
+memory line, each on demand backing logged; wait monitor dumps count exited threads instead of listing them.
+
 ## 2026-11-19 (Switch test 8 results, test 9 build): past the results; the guest stack arena fills
 
 - Test 8 (one core, the title's own priorities): Westopolis loaded and played at 43 to 60 fps (test 7: 46 to 60),

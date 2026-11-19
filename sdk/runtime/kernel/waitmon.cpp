@@ -142,12 +142,13 @@ uint32_t IdOfEthread(uint32_t ethread) {
 void Dump(int number, int64_t now) {
     std::lock_guard<std::mutex> lock(g_lock);
     LOGR("waitmon: dump %d at %.1f s, %zu threads that ran guest code", number, Secs(now), g_infos.size());
+    size_t exited = 0;
     for (auto& ip : g_infos) {
         Info& i = *ip;
         uint64_t y = i.yields.load(), w = i.waits.load(), d = i.delays.load();
         std::lock_guard<std::mutex> il(i.lock);
         if (i.state == 3) {
-            LOGR("waitmon:   thread %X exited with %08X at %.1f s", i.id, i.exit_code, Secs(i.exited_at));
+            exited++;  // Shadow-nx, switch-test10: counted, not listed (hundreds by the second stage)
         } else if (i.state == 0) {
             uint32_t c[kChain];
             int n = Chain(i.ctx, c, i.ethread ? R32(i.ethread + 0x1C) : 0);  // live: approximate
@@ -191,6 +192,7 @@ void Dump(int number, int64_t now) {
         i.last_waits = w;
         i.last_delays = d;
     }
+    LOGR("waitmon:   %zu threads have exited", exited);
 }
 
 void Watchdog() {
