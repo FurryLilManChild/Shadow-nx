@@ -457,6 +457,13 @@ bool ReadGameFile(const std::string& xbox_path, std::vector<uint8_t>& out) {
     return true;
 }
 
+// Shadow-nx, switch-test5: which thread opens and reads which file, in order, to line the Switch's stage load up
+// against the PC's (the PC loads Westopolis whole; the Switch loses its ground past the first ramp)
+static uint32_t TraceId() {
+    Thread* t = Current();
+    return t ? t->id : 0;
+}
+
 // exports
 
 KERNEL_EXPORT(190, NtCreateFile, 9) {
@@ -464,6 +471,7 @@ KERNEL_EXPORT(190, NtCreateFile, 9) {
     (void)access;
     uint32_t root;
     std::string name = ObjectName(attrs, &root);
+    LOGR("trace: thread %X create %s (disposition %u)", TraceId(), name.c_str(), disposition);
     Target t = Resolve(name, root);
     if (t.disc) return OpenOnDisc(t.entry, name, handle_out, iosb, disposition, options);
     const std::string& host = t.host;
@@ -578,6 +586,7 @@ KERNEL_EXPORT(202, NtOpenFile, 6) {
     uint32_t handle_out = a[0], attrs = a[2], iosb = a[3], options = a[5];
     uint32_t root;
     std::string name = ObjectName(attrs, &root);
+    LOGR("trace: thread %X open %s", TraceId(), name.c_str());
     Target t = Resolve(name, root);
     if (t.disc) return OpenOnDisc(t.entry, name, handle_out, iosb, 1, options);
     const std::string& host = t.host;
@@ -725,6 +734,9 @@ static uint32_t Transfer(const Args& a, bool write, uint32_t pages) {
     // game got on the Switch can be checked against the disc image itself (2026-11-16: Westopolis' ground and
     // surfaces missing past the first ramp, as if its streamed parts stg0100_NN.one never arrived or arrived wrong)
     constexpr bool kLogReads = false;  // on for switch-test2
+    if (!write && !logx::kVerbose)
+        LOGR("trace: thread %X read %s at %llX: %u of %u%s", TraceId(), f->xbox.c_str(), (unsigned long long)pos, n, len,
+             cached ? " (memory)" : "");
     if (kLogReads && !write && !logx::kVerbose) {
         uint32_t hash = 2166136261u;
         for (uint32_t i = 0; i < n; i++) {

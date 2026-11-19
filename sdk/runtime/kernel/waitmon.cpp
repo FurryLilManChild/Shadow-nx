@@ -30,7 +30,9 @@ struct Info {
     uint32_t id = 0, ethread = 0;
     X86Context* ctx = nullptr;
     std::mutex lock;  // guards the wait description below
-    int state = 0;    // 0 running, 1 waiting, 2 delaying
+    int state = 0;    // 0 running, 1 waiting, 2 delaying, 3 exited
+    uint32_t exit_code = 0;
+    int64_t exited_at = 0;
     int64_t since = 0;
     const char* kind = "wait";
     uint32_t detail = 0;
@@ -141,7 +143,9 @@ void Dump(int number, int64_t now) {
         Info& i = *ip;
         uint64_t y = i.yields.load(), w = i.waits.load(), d = i.delays.load();
         std::lock_guard<std::mutex> il(i.lock);
-        if (i.state == 0) {
+        if (i.state == 3) {
+            LOGR("waitmon:   thread %X exited with %08X at %.1f s", i.id, i.exit_code, Secs(i.exited_at));
+        } else if (i.state == 0) {
             uint32_t c[kChain];
             int n = Chain(i.ctx, c);  // live: approximate
             LOGR("waitmon:   thread %X running; since the last dump %llu yields, %llu waits, %llu delays; stack %s", i.id,
@@ -266,6 +270,21 @@ void EndDelay() {
     i->delays++;
     std::lock_guard<std::mutex> lock(i->lock);
     i->state = 0;
+}
+
+std::string CallerChain(const X86Context& ctx) {
+    uint32_t c[kChain];
+    int n = Chain(&ctx, c);
+    return ChainText(c, n);
+}
+
+void Exited(uint32_t code) {
+    if (!g_on) return;
+    Info* i = Me();
+    std::lock_guard<std::mutex> il(i->lock);
+    i->state = 3;
+    i->exit_code = code;
+    i->exited_at = NowNs();
 }
 
 void Yielded() {

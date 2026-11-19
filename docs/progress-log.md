@@ -3,6 +3,24 @@
 sheroes-nx's log (the Sonic Heroes port this one starts from) is in `docs/sheroes-nx/progress-log.md`; read it
 first, since most of its problems were in shared code and are already fixed here.
 
+## 2026-11-19 (Switch test 4 results, test 5 build): the stage load pipeline
+
+Test 4 (diagnostic build 3b9b903), five runs mapped from their own log lines:
+- Normal settings (3 cores, Switch memory order), three runs: the stage loads, the opening ramp draws, nothing past
+  it (no ground, no collision). The render cycle (packed vertices, native fans and quads, texture checks, state
+  tracking, constant reuse, each off and all off) changed nothing: the level is not badly drawn, it is not there.
+- Shadow is white in one normal run and correctly lit in another, same settings: nondeterministic (timing).
+- x86 memory order (switched on before the stage) and one core: both stuck on the loading screen.
+- Wait monitor, hung versus loaded: in a load that finishes, nine loader threads (38 to 58) run and exit and the task
+  thread 34 leaves its loop; in a hung load thread 58 is never created and thread 34 stays in 0x4F440 forever,
+  calling vtbl[1] and SwitchToThread (0x2ADDC9). No thread waits on a kernel object; the game logic never says done.
+- 0x4F440 is the game's thread class loop (constructor 0x4F4F0, base vtable 0x42C4B8): +8 keep running, +A done.
+
+Test 5 build (trace lines, always on, PC and Switch): every thread's creation (creator, start routine, context,
+caller chain), start, return and exit; every file create, open and read with its thread; the task loop's object,
+vtable, step and finish functions on entry and on exit; the wait monitor marks exited threads. The plan: a PC run
+(which loads Westopolis whole) against a Switch run, compared line by line for the first difference.
+
 ## 2026-11-16 (Switch tests 3, 3b, 3c): stuck loading on one core
 
 - switch-test3 (guest threads on core 0): no crash, menus and FMV at 60 fps, but the stage's loading screen never

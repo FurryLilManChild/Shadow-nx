@@ -5,6 +5,7 @@
 #include <memory>
 
 #include "kernel/kernel.h"
+#include "kernel/waitmon.h"
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -215,14 +216,15 @@ void StartThread(ThreadRef t) {
             si = g_start[t.get()];
             g_start.erase(t.get());
         }
-        LOGI("thread %X starts at %08X (%08X, %08X)", t->id, si.system_routine ? si.system_routine : si.start_routine,
+        LOGR("trace: thread %X starts at %08X (%08X, %08X)", t->id, si.system_routine ? si.system_routine : si.start_routine,
              si.start_routine, si.start_context);
         uint32_t code;
         if (si.system_routine)
             code = CallGuest(ctx, si.system_routine, {si.start_routine, si.start_context});
         else
             code = CallGuest(ctx, si.start_routine, {si.start_context});
-        LOGI("thread %X returned %08X", t->id, code);
+        LOGR("trace: thread %X returned %08X", t->id, code);
+        waitmon::Exited(code);
         MarkExited(*t, code);
         Unregister(t.get());
         t_current.reset();
@@ -248,7 +250,10 @@ void StartHostThread(const char* name, std::function<void(X86Context&)> fn) {
 void ExitThread(uint32_t code) {
     Thread* t = Current();
     if (t) {
-        LOGI("thread %X exits with %08X", t->id, code);
+        X86Context* c = t->ctx;
+        LOGR("trace: thread %X exits with %08X%s%s", t->id, code, c ? "; from " : "",
+             c ? waitmon::CallerChain(*c).c_str() : "");
+        waitmon::Exited(code);
         MarkExited(*t, code);
         Unregister(t);
     }

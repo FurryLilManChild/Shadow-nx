@@ -4,6 +4,7 @@
 // thread writes the whole picture to the log when a wait has lasted long (a stall), so a hang names which thread
 // waits on which object, since when, called from where in the game, and who last signalled that object.
 #include <cstdint>
+#include <string>
 #include <vector>
 
 #include "kernel/kernel.h"
@@ -19,6 +20,10 @@ void EndDelay();
 void Yielded();
 // an object was signalled (SetEvent, ReleaseSemaphore, ReleaseMutant, PulseEvent, a timer)
 void Signalled(Object& o, const char* how);
+// Shadow-nx, switch-test5: the guest return addresses on a thread's stack ("2ADF04 < 4F526 < ..."), for trace lines
+std::string CallerChain(const X86Context& ctx);
+// this thread has finished its guest code (returned or ExitThread): the dumps say so instead of "running"
+void Exited(uint32_t code);
 // the watchdog thread (Switch and PC); on with the setting wait_monitor
 void Start();
 inline bool g_on = false;
