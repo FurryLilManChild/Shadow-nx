@@ -3,6 +3,19 @@
 sheroes-nx's log (the Sonic Heroes port this one starts from) is in `docs/sheroes-nx/progress-log.md`; read it
 first, since most of its problems were in shared code and are already fixed here.
 
+## 2026-11-19 (Switch test 8 results, test 9 build): past the results; the guest stack arena fills
+
+- Test 8 (one core, the title's own priorities): Westopolis loaded and played at 43 to 60 fps (test 7: 46 to 60),
+  past the results screen and an in-engine cutscene. The loading job raises itself +2 at 0x59BF4 and drops to 0 at
+  0x59D0A around every step (KeSetBasePriorityThread, 31 times for thread 34 alone): the single CPU exclusion the
+  title relies on. bankffffffff.pac was asked for again with no crash: not a symptom.
+- Then the next stage's loading screen stalled and the game crashed: 200 guest threads by 386 s, each with a guest
+  stack of about 192 KB in the 32 MB stack arena, none ever freed; "backing D2600000+100000 failed (0xCE01)",
+  "commit D2610000 failed" (past the arena, on demand backing, out of code memory objects as sheroes-nx 2026-11-13).
+
+Test 9 build: a guest thread's stack is freed when it returns or exits (the KPCR and ETHREAD, 1.5 KB, stay); the
+memory line counts the guest stacks in use. One core stays on.
+
 ## 2026-11-19 (Switch test 7 results, test 8 build): playable, then a crash loading the next stage
 
 - Test 7: whole of Westopolis played; 46 to 60 fps in the stage, mostly 50 to 59 (test 6: 36 to 48). GPU 10 to 13

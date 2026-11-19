@@ -242,13 +242,14 @@ void Spawn(std::function<void()> fn) {
 std::string HostMemoryText() {
 #ifdef __SWITCH__
     struct mallinfo mi = mallinfo();
+    uint32_t stack_bytes = 0, stacks = mem::StacksInUse(&stack_bytes);
     size_t unclaimed = size_t(fake_heap_end - static_cast<char*>(sbrk(0)));
     char b[256];
     std::snprintf(b, sizeof b,
                   "heap %zu MB used, %zu MB free inside, %zu MB unclaimed; host threads %u running, %u started, %u "
-                  "freed; deepest guest stack %zu KB",
+                  "freed; deepest guest stack %zu KB; guest stacks %u (%u KB)",
                   size_t(mi.uordblks) >> 20, size_t(mi.fordblks) >> 20, unclaimed >> 20, g_live.load(),
-                  g_spawned.load(), g_reaped.load(), g_stack_max.load() >> 10);
+                  g_spawned.load(), g_reaped.load(), g_stack_max.load() >> 10, stacks, stack_bytes >> 10);
     return b;
 #else
     return {};
@@ -346,6 +347,7 @@ void StartThread(ThreadRef t) {
         waitmon::Exited(code);
         MarkExited(*t, code);
         Unregister(t.get());
+        mem::FreeStack(t->stack_top);  // Shadow-nx, switch-test9 (see ExitThread)
         t_current.reset();
     });
 }
@@ -375,6 +377,11 @@ void ExitThread(uint32_t code) {
         waitmon::Exited(code);
         MarkExited(*t, code);
         Unregister(t);
+        // Shadow-nx, switch-test9: the guest stack goes back for the next thread. The stack arena is 32 MB (backed
+        // up front, memory.cpp); switch-test8 made 200 threads by 386 s, a stage piece each, and the next stack
+        // past the arena failed to back ("commit D2610000 failed", 0xCE01): the next stage's loader never ran.
+        // No guest code runs on this thread again; the KPCR and ETHREAD stay (handles still name them).
+        mem::FreeStack(t->stack_top);
     }
     t_current.reset();
 #ifdef _WIN32
