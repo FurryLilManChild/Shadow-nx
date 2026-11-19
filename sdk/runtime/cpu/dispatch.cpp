@@ -6,6 +6,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include "kernel/waitmon.h"
 #include "core/log.h"
 #include "cpu/x86_ops.h"
 #include "kernel/kernel.h"
@@ -183,6 +184,7 @@ void LogGuestStack(X86Context& ctx, int words) {
 void x86_trap(X86Context& ctx, uint32_t va, const char* what) {
     LOGE("guest trap at %08X: %s", va, what);
     kernel::LogGuestStack(ctx, 64);
+    kernel::waitmon::DumpNow("a guest trap");  // Shadow-nx, switch-test8: what every other thread was doing then
     logx::Flush();
 #ifdef _WIN32
     __debugbreak();

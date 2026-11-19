@@ -854,9 +854,36 @@ KERNEL_EXPORT(140, KeResumeThread, 1) {
 }
 KERNEL_EXPORT(92, KeAlertResumeThread, 1) { return kimpl_KeResumeThread(ctx, a); }
 
+#ifdef __SWITCH__
+}  // namespace kernel
+#include <switch.h>
+namespace kernel {
+extern "C" int shadow_guest_one_core() __attribute__((weak));  // switch/cores.cpp
+#endif
+
 KERNEL_EXPORT(238, NtYieldExecution, 0) {
     waitmon::Yielded();
     SuspendPoint();
+#ifdef __SWITCH__
+    // Shadow-nx, switch-test8: with every guest thread on one core, Horizon's yield only lets threads of the same
+    // priority run. A boosted thread polling with yields would hold a lower one off the core for good; every 64th
+    // yield in a row is a real 100 us sleep, which lets any thread run (logged, the first times, with its stack).
+    static thread_local uint32_t run = 0;
+    static thread_local int64_t last = 0;
+    if (shadow_guest_one_core && shadow_guest_one_core()) {
+        int64_t now = armTicksToNs(armGetSystemTick());
+        run = now - last < 2'000'000 ? run + 1 : 0;
+        last = now;
+        if (run && run % 64 == 0) {
+            Thread* t = Current();
+            if (t && t->priority > 0)
+                LOG_FIRSTR(20, "threads: guest %X (priority %d) yielded 64 times in a row; sleeping 100 us; from %s",
+                           t->id, t->priority, waitmon::CallerChain(ctx).c_str());
+            svcSleepThread(100'000);
+            return kSuccess;
+        }
+    }
+#endif
     std::this_thread::yield();
     return kSuccess;
 }
@@ -884,7 +911,9 @@ KERNEL_EXPORT(148, KeSetPriorityThread, 2) {
     if (!t) return 0;
     int old = t->priority;
     t->priority = int32_t(a[1]);
-    LOG_FIRST(32, "threads: KeSetPriorityThread %08X to %d (was %d)", a[0], int32_t(a[1]), old);
+    // Shadow-nx, switch-test8: which of the title's routines raise and drop priorities (the first 120)
+    LOG_FIRSTR(120, "threads: KeSetPriorityThread %08X to %d (was %d) by %X; from %s", a[0], int32_t(a[1]), old,
+               Current() ? Current()->id : 0, waitmon::CallerChain(ctx).c_str());
     ApplyPriority(*t);
     return uint32_t(old);
 }
@@ -900,7 +929,9 @@ KERNEL_EXPORT(143, KeSetBasePriorityThread, 2) {
     auto& t = static_cast<Thread&>(*o);
     int old = t.priority;
     t.priority = int32_t(a[1]);
-    LOG_FIRST(32, "threads: KeSetBasePriorityThread %08X to %d (was %d)", a[0], int32_t(a[1]), old);
+    // Shadow-nx, switch-test8: which of the title's routines raise and drop priorities (the first 120)
+    LOG_FIRSTR(120, "threads: KeSetBasePriorityThread %08X to %d (was %d) by %X; from %s", a[0], int32_t(a[1]), old,
+               Current() ? Current()->id : 0, waitmon::CallerChain(ctx).c_str());
     ApplyPriority(t);
     return uint32_t(old);
 }

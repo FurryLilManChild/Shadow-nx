@@ -275,6 +275,12 @@ void EndDelay() {
     i->state = 0;
 }
 
+void DumpNow(const char* why) {
+    if (!g_on) return;
+    LOGR("waitmon: dump for %s", why);
+    Dump(0, NowNs());
+}
+
 std::string CallerChain(const X86Context& ctx) {
     uint32_t c[kChain];
     Thread* t = Current();

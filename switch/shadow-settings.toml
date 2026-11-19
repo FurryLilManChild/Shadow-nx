@@ -39,8 +39,9 @@ profile = true
 core_layout = false
 # true: every thread running the game's own code on one CPU core, as the Xbox ran them on its one CPU (the
 # game's threads expect that); the render thread and sound on the other two. false (default): spread over all three.
-# switch-test3 never finished loading a stage with it on.
-guest_one_core = false
+# On for switch-test8, with the game's own thread priorities (tests 3 to 4 stalled loading with it on; test 5 found
+# the cause of those stalls, the thread stack leak, fixed in test 6).
+guest_one_core = true
 # Diagnostics. wait_monitor: what each game thread waits on, written to the log when a wait lasts (on).
 wait_monitor = true
 

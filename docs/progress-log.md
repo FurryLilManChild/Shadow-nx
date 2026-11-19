@@ -3,6 +3,22 @@
 sheroes-nx's log (the Sonic Heroes port this one starts from) is in `docs/sheroes-nx/progress-log.md`; read it
 first, since most of its problems were in shared code and are already fixed here.
 
+## 2026-11-19 (Switch test 7 results, test 8 build): playable, then a crash loading the next stage
+
+- Test 7: whole of Westopolis played; 46 to 60 fps in the stage, mostly 50 to 59 (test 6: 36 to 48). GPU 10 to 13
+  ms a frame, render thread 5 to 9 ms, the title thread waits 2 to 4 ms.
+- Crash after the results screen: thread 1CC (the stage loading job, vtable 445B74, step 59BB0) walked the frame
+  list at 0x57DEBC (0x2EC720 > 0x2EC670) and called an attached object's function at +0x10, which was 0. At the same
+  time thread 14 ran on another core loading sound banks and asked for bankffffffff.pac (bank -1), which it never
+  did at Westopolis' start. The title raises a thread +2 and drops it back around pieces of work dozens of times.
+- Theory: on the Xbox's one CPU a boosted thread cannot be interrupted by a lower one, and the title uses that in
+  place of locks; on three cores both threads ran inside the same list.
+
+Test 8 build: guest_one_core on in the shipped settings, with the title's own priorities (3c's flat 0x3B gone);
+NtYieldExecution sleeps 100 us every 64th yield in a row on one core (no lower thread can be held off for good;
+logged with the stack when the thread is boosted); the first 120 priority changes logged with their caller chains;
+a guest trap writes a wait monitor dump of every thread before stopping.
+
 ## 2026-11-19 (Switch test 6 results, test 7 build): the ground is back; the game thread is slow
 
 - Test 6: all of Westopolis' streamed pieces load (stg0100_01 to _05, _19, _22), the ground past the ramp is there,

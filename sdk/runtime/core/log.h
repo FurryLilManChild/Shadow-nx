@@ -31,6 +31,11 @@ inline constexpr bool kVerbose = true;
 #define LOGR(...) ::logx::Write(::logx::Level::Report, __VA_ARGS__)
 
 // logs only the first n times a call site is reached
+#define LOG_FIRSTR(n, ...)                                 \
+    do {                                                   \
+        static std::atomic<int> _c{0};                     \
+        if (_c.fetch_add(1, std::memory_order_relaxed) < (n)) LOGR(__VA_ARGS__); \
+    } while (0)
 #define LOG_FIRST(n, ...)                                  \
     do {                                                   \
         static std::atomic<int> _c{0};                     \

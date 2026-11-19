@@ -24,6 +24,8 @@ void Signalled(Object& o, const char* how);
 std::string CallerChain(const X86Context& ctx);
 // this thread has finished its guest code (returned or ExitThread): the dumps say so instead of "running"
 void Exited(uint32_t code);
+// Shadow-nx, switch-test8: every thread's state right now, in the log (a guest trap calls it before stopping)
+void DumpNow(const char* why);
 // the watchdog thread (Switch and PC); on with the setting wait_monitor
 void Start();
 inline bool g_on = false;

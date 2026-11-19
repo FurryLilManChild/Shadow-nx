@@ -278,12 +278,11 @@ void ApplyPriority(Thread& t) {
     if (!h) return;
     int p = t.priority;
     u32 prio = p >= 16 ? 0x30 : p <= -16 ? 0x3F : u32(0x3B - std::clamp(p, -2, 2));
-    // Shadow-nx: with every guest thread on one core (guest_one_core), all at 0x3B (59). Horizon never runs a lower
-    // priority while a higher one is ready, and shares a core in turns only at 59 (its round robin). switch-test3b's
-    // profile: the title thread (guest 14) ran its loading screen at 100 % of core 0, yielding, while the stage's
-    // nine loader threads never ran and the load never finished. The Xbox's kernel let them through; one level does.
-    const bool flat = shadow_guest_one_core && shadow_guest_one_core();
-    if (flat) prio = 0x3B;
+    // Shadow-nx: switch-test3c put every guest thread at 0x3B with guest_one_core, on the theory that the loaders were
+    // starved; they were not (test 5: the stalls were the stack leak). switch-test8 keeps the title's own priorities on
+    // one core, as on the Xbox's one CPU: test 7 crashed with the loading job (boosted +2) and the title thread inside
+    // the same RenderWare frame list at once, on two cores. NtYieldExecution has a safety valve (xboxkrnl.cpp).
+    const bool flat = false;
     Result rc = svcSetThreadPriority(Handle(h), prio);
     LOGR("threads: guest %X priority %d -> %X%s%s", t.id, p, unsigned(prio), flat ? " (one core: all 3B)" : "",
          R_FAILED(rc) ? " (refused)" : "");
