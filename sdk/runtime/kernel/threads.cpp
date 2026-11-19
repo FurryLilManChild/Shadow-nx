@@ -60,10 +60,13 @@ void Reap() {
 // stack is filled with a pattern when the thread starts; at its end the first changed word from the bottom up is
 // the deepest point it reached.
 constexpr uint64_t kPaint = 0xCDCDCDCDCDCDCDCDull;
+// on for switch-test6 only: the loader threads used 12 KB at most, and the paint and scan cost up to 45 ms a thread
+constexpr bool kMeasureStacks = false;
 thread_local uint8_t* t_stack_lo = nullptr;
 thread_local size_t t_stack_sz = 0;
 
 void PaintStack() {
+    if (!kMeasureStacks) return;
     ::Thread* self = threadGetSelf();
     if (!self || !self->stack_mirror || !self->stack_sz) return;
     uint8_t* lo = static_cast<uint8_t*>(self->stack_mirror);

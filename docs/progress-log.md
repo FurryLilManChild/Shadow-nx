@@ -3,6 +3,20 @@
 sheroes-nx's log (the Sonic Heroes port this one starts from) is in `docs/sheroes-nx/progress-log.md`; read it
 first, since most of its problems were in shared code and are already fixed here.
 
+## 2026-11-19 (Switch test 6 results, test 7 build): the ground is back; the game thread is slow
+
+- Test 6: all of Westopolis' streamed pieces load (stg0100_01 to _05, _19, _22), the ground past the ramp is there,
+  Shadow lit. 42 host threads started, 34 freed, heap steady near 1.08 GB after the load. No thread failed to start.
+  Loader threads used at most 12 KB of stack (thread 14 never ends, so it was not measured).
+- Speed 36 to 48 fps in the stage. From 81 s on the GPU took 11 to 13 ms a frame and the render thread about 7 ms,
+  and the game thread waited only 2 to 4 ms: the game thread is the limit (about 22 ms a frame). Its profile: 70 %
+  translated game code with no hot spot, 11 % waiting, 8 % our renderer front end and kernel.
+- The cause: XBE_TSO (x86 memory order on demand, since test 4) put a check on every guest memory access; the game
+  code grew from 15.4 MB (test 3c) to 77.2 MB (test 6), hot functions 3.5 to 8 times bigger.
+
+Test 7 build: XBE_TSO off (game code 15.4 MB again, NRO 107 to 43 MB) and its menu row gone; the stack measurement
+and the per-read trace off; thread, memory and profiler lines kept.
+
 ## 2026-11-19 (Switch test 5 results, test 6 build): the stage piece thread that never started
 
 - PC (reference) and Switch logs line up thread for thread through the stage load (threads 34 to 58 all made,

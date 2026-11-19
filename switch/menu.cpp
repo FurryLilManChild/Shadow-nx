@@ -64,7 +64,7 @@ uint8_t g_map[8];  // the map in use
 
 enum Row {
     R_TITLE_CTRL, R_LAYOUT, R_MAP0, R_MAP7 = R_MAP0 + 7, R_INV_X, R_INV_Y, R_STICK, R_CONTROLLERS,
-    R_TITLE_DISP, R_SCALE, R_SHARP, R_ANISO, R_SMAA, R_FPS, R_MUSIC, R_EFFECTS, R_BOOST, R_TITLE_DIAG, R_MEMORDER, R_ONECORE,
+    R_TITLE_DISP, R_SCALE, R_SHARP, R_ANISO, R_SMAA, R_FPS, R_MUSIC, R_EFFECTS, R_BOOST, R_TITLE_DIAG, R_ONECORE,
     R_DEFAULTS, R_CLOSE, R_COUNT
 };
 int g_sel = R_LAYOUT;
@@ -164,11 +164,6 @@ void RowText(int r, const char*& label, char* val, size_t vn, const char*& note)
             note = "3D drawn at full screen height. Costs GPU time";
             break;
         case R_TITLE_DIAG: label = "DIAGNOSTICS (TEST BUILD)"; break;
-        case R_MEMORDER:  // Shadow-nx
-            label = "Memory order";
-            std::snprintf(val, vn, "%s", x86_g_tso ? "x86" : "Switch");
-            note = "x86: the game's threads see memory as on an Xbox. Slower";
-            break;
         case R_ONECORE:
             label = "Game threads on one core";
             std::snprintf(val, vn, "%s", host::GuestOneCoreNext() ? "On" : "Off");
@@ -235,10 +230,6 @@ void Change(int r, int d) {
         case R_STICK: shadow::g_stick_response = uint32_t(Wrap(int(std::min<uint32_t>(shadow::g_stick_response, 2)), d, 3)); break;
         case R_SCALE: s.render_percent = kRenderPct[Wrap(IndexOf(kRenderPct, Count(kRenderPct), s.render_percent), d, Count(kRenderPct))]; break;
         case R_SHARP: app::g_sharp_scene = !app::g_sharp_scene; break;
-        case R_MEMORDER:
-            x86_g_tso = !x86_g_tso;
-            LOGR("menu: memory order %s (x86_memory_order = %s, in force now)", x86_g_tso ? "x86" : "Switch", x86_g_tso ? "true" : "false");
-            break;
         case R_ONECORE:
             host::SetGuestOneCore(!host::GuestOneCoreNext());
             LOGR("menu: game threads on one core %s from the next start", host::GuestOneCoreNext() ? "on" : "off");

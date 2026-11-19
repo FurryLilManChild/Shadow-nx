@@ -734,7 +734,8 @@ static uint32_t Transfer(const Args& a, bool write, uint32_t pages) {
     // game got on the Switch can be checked against the disc image itself (2026-11-16: Westopolis' ground and
     // surfaces missing past the first ramp, as if its streamed parts stg0100_NN.one never arrived or arrived wrong)
     constexpr bool kLogReads = false;  // on for switch-test2
-    if (!write && !logx::kVerbose)
+    constexpr bool kTraceReads = false;  // Shadow-nx: on for switch-tests 5 and 6
+    if (kTraceReads && !write && !logx::kVerbose)
         LOGR("trace: thread %X read %s at %llX: %u of %u%s", TraceId(), f->xbox.c_str(), (unsigned long long)pos, n, len,
              cached ? " (memory)" : "");
     if (kLogReads && !write && !logx::kVerbose) {

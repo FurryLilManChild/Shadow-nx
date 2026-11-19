@@ -82,8 +82,10 @@ set(HOST_INCLUDES ${HOST}/compat ${SDK}/harness/compat ${HOST} ${GAME} ${SDK}/ru
     ${THIRD}/glslang ${VULKAN_INCLUDE} ${THIRD}/SPIRV-Cross ${THIRD}/uam)
 # x86 chars are signed, as the game's code and the runtime were written for
 set(HOST_OPTIONS -fno-strict-aliasing -fsigned-char)
-# Shadow-nx: x86 memory order on demand for guest memory (sdk/runtime/cpu/x86_ops.h, the setting x86_memory_order)
-add_compile_definitions(XBE_TSO)
+# Shadow-nx: x86 memory order on demand for guest memory (sdk/runtime/cpu/x86_ops.h, XBE_TSO) is off. It was on for
+# switch-tests 4 to 6: it fixed nothing (the hangs were the thread stack leak) and made the translated game code five
+# times bigger (15.4 to 77.2 MB) with a check on every guest memory access; switch-test6's profile had the game
+# thread at about 22 ms a frame, in no hot spot. Define XBE_TSO again only to repeat that experiment.
 # every log level (info and debug lines too) in this release build, for console diagnostics
 option(SHADOW_VERBOSE_LOG "log info and debug lines" OFF)
 if(SHADOW_VERBOSE_LOG)

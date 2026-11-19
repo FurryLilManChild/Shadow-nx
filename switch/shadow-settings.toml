@@ -41,11 +41,8 @@ core_layout = false
 # game's threads expect that); the render thread and sound on the other two. false (default): spread over all three.
 # switch-test3 never finished loading a stage with it on.
 guest_one_core = false
-# Diagnostics of the switch-test4 build. wait_monitor: what each game thread waits on, written to the log when a wait
-# lasts (on). x86_memory_order: the game's threads see memory in the order an x86 keeps (slower; also in the port
-# menu, in force at once).
+# Diagnostics. wait_monitor: what each game thread waits on, written to the log when a wait lasts (on).
 wait_monitor = true
-x86_memory_order = false
 
 # "vsync" (default): with vsync on and fps_cap 60, the screen paces the game (smoother: a slow frame now and then is
 # hidden by the frames already queued). "timer": the game also waits on its own 60 Hz clock (the older builds).
