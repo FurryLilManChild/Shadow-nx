@@ -79,12 +79,15 @@ bool AfterCall(uint32_t ra) {
         if (G<uint8_t>(ra - len) == 0xFF && ((G<uint8_t>(ra - len + 1) >> 3) & 7) == 2) return true;
     return false;
 }
-int Chain(const X86Context* ctx, uint32_t* out) {
+// stack_top: the thread's StackBase; the scan stops there. Shadow-nx, switch-test5: the PC crashed reading past the
+// top of a fresh thread's stack (thread 10 creating a thread 0x10C bytes below its top, the scan going 2 KB up)
+int Chain(const X86Context* ctx, uint32_t* out, uint32_t stack_top = 0) {
     if (!ctx) return 0;
     FindCode();
     int n = 0;
     uint32_t esp = ctx->esp;
     for (uint32_t i = 0; i < 512 && n < kChain; i++) {
+        if (stack_top && esp + i * 4 + 4 > stack_top) break;
         uint32_t v = R32(esp + i * 4);
         if (AfterCall(v)) out[n++] = v;
     }
@@ -147,7 +150,7 @@ void Dump(int number, int64_t now) {
             LOGR("waitmon:   thread %X exited with %08X at %.1f s", i.id, i.exit_code, Secs(i.exited_at));
         } else if (i.state == 0) {
             uint32_t c[kChain];
-            int n = Chain(i.ctx, c);  // live: approximate
+            int n = Chain(i.ctx, c, i.ethread ? R32(i.ethread + 0x1C) : 0);  // live: approximate
             LOGR("waitmon:   thread %X running; since the last dump %llu yields, %llu waits, %llu delays; stack %s", i.id,
                  (unsigned long long)(y - i.last_yields), (unsigned long long)(w - i.last_waits),
                  (unsigned long long)(d - i.last_delays), ChainText(c, n).c_str());
@@ -228,7 +231,7 @@ void BeginWait(const std::vector<ObjectRef>& objs, bool wait_all, int64_t timeou
     if (!g_on) return;
     Info* i = Me();
     uint32_t c[kChain];
-    int n = Chain(i->ctx, c);
+    int n = Chain(i->ctx, c, Current() ? Current()->stack_top : 0);
     std::lock_guard<std::mutex> lock(i->lock);
     i->state = 1;
     i->since = NowNs();
@@ -255,7 +258,7 @@ void BeginDelay(int64_t interval) {
     if (!g_on) return;
     Info* i = Me();
     uint32_t c[kChain];
-    int n = Chain(i->ctx, c);
+    int n = Chain(i->ctx, c, Current() ? Current()->stack_top : 0);
     std::lock_guard<std::mutex> lock(i->lock);
     i->state = 2;
     i->since = NowNs();
@@ -274,7 +277,8 @@ void EndDelay() {
 
 std::string CallerChain(const X86Context& ctx) {
     uint32_t c[kChain];
-    int n = Chain(&ctx, c);
+    Thread* t = Current();
+    int n = Chain(&ctx, c, t ? t->stack_top : 0);
     return ChainText(c, n);
 }
 
