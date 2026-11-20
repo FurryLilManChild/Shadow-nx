@@ -22,7 +22,6 @@ out/
 logs/
 screenshots/
 shadercache/
-!installer/release/shadercache/
 hdd/
 
 # the NRO icon carries the game's name (a trademark of its owners): kept local
@@ -36,3 +35,4 @@ CLAUDE.local.md
 /out/
 *_analysis.json
 /nvk_sdk
+build-dk-linux/

@@ -64,7 +64,7 @@ uint8_t g_map[8];  // the map in use
 
 enum Row {
     R_TITLE_CTRL, R_LAYOUT, R_MAP0, R_MAP7 = R_MAP0 + 7, R_INV_X, R_INV_Y, R_STICK, R_CONTROLLERS,
-    R_TITLE_DISP, R_SCALE, R_SHARP, R_ANISO, R_SMAA, R_FPS, R_MUSIC, R_EFFECTS, R_BOOST, R_TITLE_DIAG, R_ONECORE,
+    R_TITLE_DISP, R_SCALE, R_SHARP, R_ANISO, R_SMAA, R_FPS, R_MUSIC, R_EFFECTS, R_BOOST,
     R_DEFAULTS, R_CLOSE, R_COUNT
 };
 int g_sel = R_LAYOUT;
@@ -102,7 +102,7 @@ int IndexOf(const uint32_t* v, int n, uint32_t x) {
     return best;
 }
 
-bool Selectable(int r) { return r != R_TITLE_CTRL && r != R_TITLE_DISP && r != R_TITLE_DIAG; }
+bool Selectable(int r) { return r != R_TITLE_CTRL && r != R_TITLE_DISP; }
 
 int Wrap(int v, int d, int n) { return ((v + d) % n + n) % n; }
 
@@ -162,12 +162,6 @@ void RowText(int r, const char*& label, char* val, size_t vn, const char*& note)
             label = "Sharp 3D scene";
             std::snprintf(val, vn, "%s", app::g_sharp_scene ? "On" : "Off");
             note = "3D drawn at full screen height. Costs GPU time";
-            break;
-        case R_TITLE_DIAG: label = "DIAGNOSTICS (TEST BUILD)"; break;
-        case R_ONECORE:
-            label = "Game threads on one core";
-            std::snprintf(val, vn, "%s", host::GuestOneCoreNext() ? "On" : "Off");
-            note = "Applies from the next start";
             break;
         case R_ANISO:
             label = "Texture filtering";
@@ -230,10 +224,6 @@ void Change(int r, int d) {
         case R_STICK: shadow::g_stick_response = uint32_t(Wrap(int(std::min<uint32_t>(shadow::g_stick_response, 2)), d, 3)); break;
         case R_SCALE: s.render_percent = kRenderPct[Wrap(IndexOf(kRenderPct, Count(kRenderPct), s.render_percent), d, Count(kRenderPct))]; break;
         case R_SHARP: app::g_sharp_scene = !app::g_sharp_scene; break;
-        case R_ONECORE:
-            host::SetGuestOneCore(!host::GuestOneCoreNext());
-            LOGR("menu: game threads on one core %s from the next start", host::GuestOneCoreNext() ? "on" : "off");
-            break;
         case R_ANISO: s.aniso = kAniso[Wrap(IndexOf(kAniso, Count(kAniso), s.aniso), d, Count(kAniso))]; break;
         case R_SMAA: SetSmaa(!host::Smaa()); break;
         case R_FPS: shadow::g_fps_counter = !shadow::g_fps_counter; break;
@@ -352,7 +342,7 @@ void DrawMenu(Canvas& c) {
     c.Fill(0, 0, c.fx, c.h, C_BORDER);
     c.Fill(c.w - c.fx, 0, c.fx, c.h, C_BORDER);
     int y = pad + c.fy;
-    c.Text(x0, y, "SONIC HEROES: PORT MENU", C_TITLE);
+    c.Text(x0, y, "SHADOW THE HEDGEHOG: PORT MENU", C_TITLE);
     y += lh;
     for (int r = 0; r < R_COUNT; r++, y += lh) {
         const char *label, *rn;

@@ -1,6 +1,7 @@
 # dk_shaders: the deko3d feasibility check on the PC. Takes the SPIR-V the Vulkan renderer caches (shadercache/*.spv),
 # turns each into GLSL with SPIRV-Cross the way the deko3d backend will, and compiles it with uam to DKSH.
 # Build with MSYS2 MINGW64 (gcc): cmake -S tools/dk_shaders -B build-dk -G Ninja && ninja -C build-dk
+# Shadow-nx: also on Linux (the release's shader cache is baked in the cloud: tools/bake_shaders.sh)
 cmake_minimum_required(VERSION 3.20)
 project(dk_shaders C CXX)
 if(NOT CMAKE_BUILD_TYPE)
@@ -20,4 +21,6 @@ add_executable(dk_shaders dk_shaders.cpp ../../switch/dk_glsl.cpp)
 target_include_directories(dk_shaders PRIVATE ../../switch)
 set_target_properties(dk_shaders PROPERTIES CXX_STANDARD 17)
 target_link_libraries(dk_shaders PRIVATE spirv_cross_glsl uamlib)
-target_link_options(dk_shaders PRIVATE -static -Wl,--stack,8388608)
+if(WIN32)
+  target_link_options(dk_shaders PRIVATE -static -Wl,--stack,8388608)
+endif()

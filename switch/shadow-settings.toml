@@ -32,18 +32,20 @@ state_tracking = true
 
 # For development: true records every millisecond which function the game is running, into logs/prof.bin.
 # It costs some performance: leave it false to play.
-profile = true
+profile = false
 
 # false (default): Horizon places the threads. true: the game's main thread gets a CPU core of its own (the render thread
 # another, the rest the third). Measured on the console: no faster than letting Horizon choose.
 core_layout = false
-# true: every thread running the game's own code on one CPU core, as the Xbox ran them on its one CPU (the
-# game's threads expect that); the render thread and sound on the other two. false (default): spread over all three.
-# On for switch-test8, with the game's own thread priorities (tests 3 to 4 stalled loading with it on; test 5 found
-# the cause of those stalls, the thread stack leak, fixed in test 6).
+# true (default): every thread running the game's own code on one CPU core, as the Xbox ran them on its one CPU;
+# the render thread and sound on the other two. The game relies on it: false crashes when a stage loads.
 guest_one_core = true
-# Diagnostics. wait_monitor: what each game thread waits on, written to the log when a wait lasts (on).
-wait_monitor = true
+# For development, all false to play. wait_monitor: what each game thread waits on, in the log when a wait lasts.
+# trace_threads: every game thread's start and end and every file it opens. self_test: 2000 threads and stacks
+# made and freed at start, with the memory before and after.
+wait_monitor = false
+trace_threads = false
+self_test = false
 
 # "vsync" (default): with vsync on and fps_cap 60, the screen paces the game (smoother: a slow frame now and then is
 # hidden by the frames already queued). "timer": the game also waits on its own 60 Hz clock (the older builds).

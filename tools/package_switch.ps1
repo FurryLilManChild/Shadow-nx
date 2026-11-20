@@ -1,10 +1,10 @@
-# Builds switch_sd\switch\sheroes-nx\ beside the repo: shadow.nro, the default settings, LICENSES.txt and an empty game\
+# Builds switch_sd\switch\shadow\ beside the repo: shadow.nro, the default settings, LICENSES.txt and an empty game\
 # folder for the player's own files. Nothing of the game goes in: the player copies those.
 # package_switch.ps1 [-Build build-switch-pgo]  (run tools/make_licenses.py first when a license changes)
 param([string]$Build = 'build-switch')
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
-$out = Join-Path $root 'switch_sd\switch\sheroes-nx'
+$out = Join-Path $root 'switch_sd\switch\shadow'
 $nro = Join-Path $root "$Build\shadow.nro"
 if (-not (Test-Path $nro)) { throw "No ${nro}: build it first (switch/build.sh)" }
 # only the package's own files are replaced: anything else there (a tester's logs copied back, say) stays
@@ -12,7 +12,7 @@ New-Item -ItemType Directory -Force (Join-Path $out 'game') | Out-Null
 Copy-Item $nro $out -Force
 Copy-Item (Join-Path $root 'switch\shadow-settings.toml') $out -Force
 Set-Content (Join-Path $out 'game\PUT-THE-GAME-HERE.txt') -Encoding utf8 -Value @'
-Copy the files of your Bloody Roar Extreme disc (Xbox) here: default.xbe with all its folders,
+Copy the files of your Shadow the Hedgehog disc (Xbox, USA) here: default.xbe with all its folders,
 or an .iso image of the disc. They are the same files as the assets folder of the Windows package.
 '@
 

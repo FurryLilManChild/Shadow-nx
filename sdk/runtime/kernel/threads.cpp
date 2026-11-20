@@ -291,6 +291,7 @@ void Spawn(std::function<void()> fn) {
 
 void HostSelfTest() {
 #ifdef __SWITCH__
+    if (!g_self_test) return;
     using Clock = std::chrono::steady_clock;
     auto unclaimed = [] { return size_t(fake_heap_end - static_cast<char*>(sbrk(0))); };
     LOGR("selftest: before: %s", HostMemoryText().c_str());
@@ -437,16 +438,16 @@ void StartThread(ThreadRef t) {
             g_start.erase(t.get());
         }
 #ifdef __SWITCH__
-        LOGR("memory: %s", HostMemoryText().c_str());
+        TRACE("memory: %s", HostMemoryText().c_str());
 #endif
-        LOGR("trace: thread %X starts at %08X (%08X, %08X)", t->id, si.system_routine ? si.system_routine : si.start_routine,
+        TRACE("trace: thread %X starts at %08X (%08X, %08X)", t->id, si.system_routine ? si.system_routine : si.start_routine,
              si.start_routine, si.start_context);
         uint32_t code;
         if (si.system_routine)
             code = CallGuest(ctx, si.system_routine, {si.start_routine, si.start_context});
         else
             code = CallGuest(ctx, si.start_routine, {si.start_context});
-        LOGR("trace: thread %X returned %08X; stack used %zu KB", t->id, code, StackUsed() >> 10);
+        TRACE("trace: thread %X returned %08X; stack used %zu KB", t->id, code, StackUsed() >> 10);
         waitmon::Exited(code);
         MarkExited(*t, code);
         Unregister(t.get());
@@ -475,7 +476,7 @@ void ExitThread(uint32_t code) {
     Thread* t = Current();
     if (t) {
         X86Context* c = t->ctx;
-        LOGR("trace: thread %X exits with %08X; stack used %zu KB%s%s", t->id, code, StackUsed() >> 10,
+        TRACE("trace: thread %X exits with %08X; stack used %zu KB%s%s", t->id, code, StackUsed() >> 10,
              c ? "; from " : "", c ? waitmon::CallerChain(*c).c_str() : "");
         waitmon::Exited(code);
         MarkExited(*t, code);

@@ -183,6 +183,13 @@ void StartThread(ThreadRef t);
 // Shadow-nx, switch-test10: at boot, 2000 host threads made and ended and 2000 guest stacks taken and freed, with
 // the memory before and after in the log: a leak in either shows in seconds, not after a stage (Switch only)
 void HostSelfTest();
+// Shadow-nx 0.5.0: the diagnostics of switch-tests 5 to 10, off in a release (settings trace_threads, self_test)
+inline bool g_trace = false;      // thread lifecycle, file opens, the task loop
+inline bool g_self_test = false;  // HostSelfTest at boot
+#define TRACE(...)                              \
+    do {                                        \
+        if (::kernel::g_trace) LOGR(__VA_ARGS__); \
+    } while (0)
 [[noreturn]] void ExitThread(uint32_t code);
 // Shadow-nx, switch-test6: the Switch's heap and host threads in one line for the log (empty elsewhere)
 std::string HostMemoryText();

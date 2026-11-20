@@ -76,12 +76,12 @@ X86_FUNC(sub_0004F440) {
     const uint32_t vt = obj ? R32(obj) : 0;
     Thread* t = Current();
     const uint32_t id = t ? t->id : 0;
-    LOGR("trace: thread %X task loop: object %08X, vtable %08X, step %08X, finish %08X, flags %02X %02X %02X", id, obj,
+    TRACE("trace: thread %X task loop: object %08X, vtable %08X, step %08X, finish %08X, flags %02X %02X %02X", id, obj,
          vt, vt ? R32(vt + 4) : 0, vt ? R32(vt + 8) : 0, obj ? G<uint8_t>(obj + 8) : 0, obj ? G<uint8_t>(obj + 9) : 0,
          obj ? G<uint8_t>(obj + 10) : 0);
     const int64_t t0 = shadow::Now();
     __imp__sub_0004F440(ctx, base);
-    LOGR("trace: thread %X task loop ends after %.2f s: object %08X, vtable now %08X, flags %02X %02X %02X", id,
+    TRACE("trace: thread %X task loop ends after %.2f s: object %08X, vtable now %08X, flags %02X %02X %02X", id,
          double(shadow::Now() - t0) / 1e9, obj, obj ? R32(obj) : 0, obj ? G<uint8_t>(obj + 8) : 0,
          obj ? G<uint8_t>(obj + 9) : 0, obj ? G<uint8_t>(obj + 10) : 0);
 }

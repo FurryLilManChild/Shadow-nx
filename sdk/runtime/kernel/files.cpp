@@ -471,7 +471,7 @@ KERNEL_EXPORT(190, NtCreateFile, 9) {
     (void)access;
     uint32_t root;
     std::string name = ObjectName(attrs, &root);
-    LOGR("trace: thread %X create %s (disposition %u)", TraceId(), name.c_str(), disposition);
+    TRACE("trace: thread %X create %s (disposition %u)", TraceId(), name.c_str(), disposition);
     Target t = Resolve(name, root);
     if (t.disc) return OpenOnDisc(t.entry, name, handle_out, iosb, disposition, options);
     const std::string& host = t.host;
@@ -586,7 +586,7 @@ KERNEL_EXPORT(202, NtOpenFile, 6) {
     uint32_t handle_out = a[0], attrs = a[2], iosb = a[3], options = a[5];
     uint32_t root;
     std::string name = ObjectName(attrs, &root);
-    LOGR("trace: thread %X open %s", TraceId(), name.c_str());
+    TRACE("trace: thread %X open %s", TraceId(), name.c_str());
     Target t = Resolve(name, root);
     if (t.disc) return OpenOnDisc(t.entry, name, handle_out, iosb, 1, options);
     const std::string& host = t.host;
@@ -737,7 +737,7 @@ static uint32_t Transfer(const Args& a, bool write, uint32_t pages) {
     constexpr bool kLogReads = false;  // on for switch-test2
     constexpr bool kTraceReads = false;  // Shadow-nx: on for switch-tests 5 and 6
     if (kTraceReads && !write && !logx::kVerbose)
-        LOGR("trace: thread %X read %s at %llX: %u of %u%s", TraceId(), f->xbox.c_str(), (unsigned long long)pos, n, len,
+        TRACE("trace: thread %X read %s at %llX: %u of %u%s", TraceId(), f->xbox.c_str(), (unsigned long long)pos, n, len,
              cached ? " (memory)" : "");
     if (kLogReads && !write && !logx::kVerbose) {
         uint32_t hash = 2166136261u;

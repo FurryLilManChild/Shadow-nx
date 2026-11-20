@@ -808,7 +808,7 @@ KERNEL_EXPORT(255, PsCreateSystemThreadEx, 10) {
     ThreadRef t = CreateThread(stack ? stack : 0x10000, tls, system, start, context, suspended);
     // Shadow-nx, switch-test5: who made which thread, to run what, from where in the game
     Thread* me = Current();
-    LOGR("trace: thread %X created by %X: start %08X, context %08X%s; from %s", t->id, me ? me->id : 0, start, context,
+    TRACE("trace: thread %X created by %X: start %08X, context %08X%s; from %s", t->id, me ? me->id : 0, start, context,
          suspended ? ", suspended" : "", waitmon::CallerChain(ctx).c_str());
     if (handle_out) W32(handle_out, NewHandle(t));
     if (id_out) W32(id_out, t->id);

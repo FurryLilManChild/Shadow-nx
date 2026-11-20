@@ -3,6 +3,19 @@
 sheroes-nx's log (the Sonic Heroes port this one starts from) is in `docs/sheroes-nx/progress-log.md`; read it
 first, since most of its problems were in shared code and are already fixed here.
 
+## 2026-11-20 (Switch test 10 results, 0.5.0 release candidate)
+
+- Test 10: self test PASSED (2000 host threads, 2000 guest stacks, nothing left over, 3.5 s); a cutscene, a stage, a
+  cutscene and the start of another stage, every loading screen quick; host stack pool flat at 14, guest stacks 7
+  to 10, heap near 1.45 GB, nothing backed on demand. Kernel objects alive climb slowly (12 to 262 in 8 minutes,
+  system arena 1.8 to 2.1 MB): a slow leak, hours from mattering; after 0.5. Gameplay mostly 52 to 60 fps at stock
+  (1020/307/1331 handheld, logged by clocks.cpp), cutscenes at 30. White Shadow not seen since test 5.
+- 0.5.0: version 0.5.0; the build line carries the git commit (stamp.cmake) for tools/check_log.py (gate 3);
+  tools/preflight.sh (gates 1 and 2); diagnostics off by default (profile, wait_monitor, trace_threads, self_test),
+  one core on by default, the diagnostics menu rows gone, the menu title fixed; tools/bake_shaders.sh bakes the
+  release's shader cache in the cloud with the console's own SPIR-V to GLSL and uam (tools/dk_shaders, now also on
+  Linux); tools/package_switch.sh makes the release zip; README for 0.5.0.
+
 ## 2026-11-19 (Switch test 9 results, test 10 build): host stacks fragment the heap
 
 - Test 9: the guest stacks stayed at 7 to 9 for the whole run; Westopolis and the next stage played; the loading

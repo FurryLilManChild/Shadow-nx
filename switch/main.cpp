@@ -78,8 +78,8 @@ uint32_t g_texture_check_frames = 8;
 bool g_profile = false;
 // core_layout: the title thread alone on core 0, the render thread on core 1, the rest on 2 (cores.cpp)
 bool g_core_layout = false;
-bool g_guest_one_core = false;  // Shadow-nx: guest threads on one core (cores.cpp); off: switch-test3 hung on it
-bool g_guest_one_core_next = false;  // what the menu set, saved, in force from the next start
+bool g_guest_one_core = true;  // Shadow-nx: guest threads on one core (cores.cpp), as on the Xbox; the game needs it
+bool g_guest_one_core_next = true;  // what the menu set, saved, in force from the next start
 // frame_pacing: "vsync" (default) lets the screen pace the game when vsync is on and the cap is the refresh rate;
 // "timer" also sleeps the title thread to its own 60 Hz grid, as before
 std::string g_frame_pacing = "vsync";
@@ -128,6 +128,8 @@ toml::table Table() {
                   {"saltynx", g_saltynx},
                   {"profile", g_profile},
                   {"wait_monitor", kernel::waitmon::g_on},
+                  {"trace_threads", kernel::g_trace},
+                  {"self_test", kernel::g_self_test},
                   {"x86_memory_order", x86_g_tso},
                   {"core_layout", g_core_layout},
                   {"guest_one_core", g_guest_one_core_next},
@@ -163,7 +165,7 @@ Settings DefaultSettings() {
     gpu::g_draw_copy = true;
     gpu::g_track_state = true;  // the render thread compares only the render states and constants written
     gpu::g_reuse_constants = true;  // a draw with the previous draw's constants reuses their upload
-    kernel::waitmon::g_on = true;  // Shadow-nx: switch-test4's wait monitor
+    kernel::waitmon::g_on = false;  // Shadow-nx: switch-test4's wait monitor, off in 0.5.0 (setting wait_monitor)
     return s;
 }
 
@@ -200,6 +202,8 @@ void Load() {
     g_saltynx = t["saltynx"].value_or(g_saltynx);
     g_profile = t["profile"].value_or(g_profile);
     kernel::waitmon::g_on = t["wait_monitor"].value_or(kernel::waitmon::g_on);
+    kernel::g_trace = t["trace_threads"].value_or(kernel::g_trace);
+    kernel::g_self_test = t["self_test"].value_or(kernel::g_self_test);
     x86_g_tso = t["x86_memory_order"].value_or(x86_g_tso);
     g_core_layout = t["core_layout"].value_or(g_core_layout);
     g_guest_one_core = g_guest_one_core_next = t["guest_one_core"].value_or(g_guest_one_core);
