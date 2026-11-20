@@ -13,6 +13,7 @@ Feature ready, not yet played through to the end. Tested through the first three
 loading screens, on an unpatched V1 Switch at stock clocks.
 
 - Gameplay runs at about 50 to 60 fps at stock clocks, with dips into the mid 40s in the busiest spots.
+- Pre-rendered movies play at about 15 fps.
 - In-engine cutscenes run at 30 fps.
 - The opening movie and other pre-rendered movies can be skipped with Start. In-engine cutscenes cannot be skipped yet.
 
@@ -44,6 +45,7 @@ Logs go to `sdmc:/switch/shadow/logs/`. Near the top, `shadow.log` names the bui
 ## Known issues
 
 - Not 60 fps everywhere at stock clocks yet.
+- Pre-rendered movies play at about 15 fps (each frame's picture is uploaded too slowly). Start skips them.
 - In-engine cutscenes cannot be skipped.
 - Only the first three stages have been tested.
 
