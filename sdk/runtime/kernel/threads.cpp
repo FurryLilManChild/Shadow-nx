@@ -39,15 +39,22 @@ namespace {
 // stack from this pool; a joined thread's stack goes back to the pool, never to the heap. The pool grows to the
 // most threads alive at once.
 constexpr size_t kHostStack = 64u << 20;
+// Shadow-nx 0.5.0 RC3: the title's task threads (task_thread_start) get 8 MB. Each stack is mapped into the
+// process's stack region, which held about 20 of 64 MB: RC2 had 19 host threads alive in a stage load and one
+// threadCreate failed (0xDC01, no room in the region; the retry worked). Task and loader threads used 12 KB at most
+// (switch-test6's measurement, the loading job included).
+constexpr size_t kSmallStack = 8u << 20;
 struct HostThread {
     ::Thread t{};
     void* mem = nullptr;
+    size_t size = kHostStack;
     std::function<void()>* fn = nullptr;
 };
 std::mutex g_done_lock;
 std::vector<HostThread*> g_done;
-std::vector<void*> g_free_stacks;  // under g_done_lock
-std::atomic<uint32_t> g_live{0}, g_spawned{0}, g_reaped{0}, g_pool{0};
+std::vector<void*> g_free_stacks;        // 64 MB, under g_done_lock
+std::vector<void*> g_free_small_stacks;  // 8 MB, under g_done_lock
+std::atomic<uint32_t> g_live{0}, g_spawned{0}, g_reaped{0}, g_pool{0}, g_pool_small{0}, g_live_peak{0};
 std::atomic<size_t> g_stack_max{0};
 thread_local HostThread* t_host = nullptr;
 
@@ -68,7 +75,7 @@ void Reap() {
         threadClose(&h->t);
         {
             std::lock_guard<std::mutex> lock(g_done_lock);
-            g_free_stacks.push_back(h->mem);
+            (h->size == kSmallStack ? g_free_small_stacks : g_free_stacks).push_back(h->mem);
         }
         delete h;
         g_reaped++;
@@ -76,23 +83,24 @@ void Reap() {
     }
 }
 
-void* TakeStack() {
+void* TakeStack(size_t size) {
+    auto& pool = size == kSmallStack ? g_free_small_stacks : g_free_stacks;
     {
         std::lock_guard<std::mutex> lock(g_done_lock);
-        if (!g_free_stacks.empty()) {
-            void* m = g_free_stacks.back();
-            g_free_stacks.pop_back();
+        if (!pool.empty()) {
+            void* m = pool.back();
+            pool.pop_back();
             return m;
         }
     }
-    void* m = memalign(0x1000, kHostStack);
-    if (m) g_pool++;
+    void* m = memalign(0x1000, size);
+    if (m) (size == kSmallStack ? g_pool_small : g_pool)++;
     return m;
 }
 
-void GiveBackStack(void* m) {
+void GiveBackStack(void* m, size_t size) {
     std::lock_guard<std::mutex> lock(g_done_lock);
-    g_free_stacks.push_back(m);
+    (size == kSmallStack ? g_free_small_stacks : g_free_stacks).push_back(m);
 }
 
 // Shadow-nx, switch-test6: how deep each guest thread's stack really goes, to size stacks from data later. The
@@ -221,7 +229,7 @@ void NameHostThread(const char* name) {
 }
 
 // recompiled code nests host frames as deep as the guest's calls, give it room
-void Spawn(std::function<void()> fn) {
+void Spawn(std::function<void()> fn, bool small_stack = false) {
     auto* f = new std::function<void()>(std::move(fn));
 #ifdef _WIN32
     auto entry = [](void* p) -> DWORD {
@@ -248,8 +256,9 @@ void Spawn(std::function<void()> fn) {
     for (int attempt = 0; attempt < 2; attempt++) {
         auto* h = new HostThread;
         h->fn = f;
-        h->mem = TakeStack();
-        rc = h->mem ? threadCreate(&h->t, entry, h, h->mem, kHostStack, 0x3B, -2)
+        h->size = small_stack ? kSmallStack : kHostStack;
+        h->mem = TakeStack(h->size);
+        rc = h->mem ? threadCreate(&h->t, entry, h, h->mem, h->size, 0x3B, -2)
                     : MAKERESULT(Module_Libnx, LibnxError_OutOfMemory);
         if (R_SUCCEEDED(rc)) {
             // as libnx's pthread_create: any core of the process's
@@ -260,11 +269,13 @@ void Spawn(std::function<void()> fn) {
             if (R_FAILED(rc)) threadClose(&h->t);
         }
         if (R_SUCCEEDED(rc)) {
-            g_live++;
+            uint32_t live = ++g_live, peak = g_live_peak.load();
+            while (live > peak && !g_live_peak.compare_exchange_weak(peak, live)) {
+            }
             g_spawned++;
             return;
         }
-        if (h->mem) GiveBackStack(h->mem);
+        if (h->mem) GiveBackStack(h->mem, h->size);
         delete h;
         LOGR("threads: %s a host thread (result 0x%X)%s; %s", attempt ? "FAILED to start" : "could not start",
              unsigned(rc), attempt ? "" : ", retrying", HostMemoryText().c_str());
@@ -351,9 +362,10 @@ std::string HostMemoryText() {
     char b[512];
     std::snprintf(b, sizeof b,
                   "heap %zu MB used, %zu MB free inside, %zu MB unclaimed; host threads %u running, %u started, %u "
-                  "freed, %u stacks pooled; guest stacks %u (%u KB); %s",
+                  "freed, %u alive at most, stacks pooled %u of 64 MB and %u of 8 MB; guest stacks %u (%u KB); %s",
                   size_t(mi.uordblks) >> 20, size_t(mi.fordblks) >> 20, unclaimed >> 20, g_live.load(),
-                  g_spawned.load(), g_reaped.load(), g_pool.load(), stacks, stack_bytes >> 10, KernelCountsText().c_str());
+                  g_spawned.load(), g_reaped.load(), g_live_peak.load(), g_pool.load(), g_pool_small.load(), stacks,
+                  stack_bytes >> 10, KernelCountsText().c_str());
     return b;
 #else
     return {};
@@ -416,6 +428,12 @@ ThreadRef CreateThread(uint32_t stack_size, uint32_t tls_size, uint32_t system_r
 
 void StartThread(ThreadRef t) {
     Register(t);
+    bool small = false;
+    {
+        std::lock_guard<std::mutex> lock(g_start_lock);
+        auto it = g_start.find(t.get());
+        small = g_task_thread_start && it != g_start.end() && it->second.start_routine == g_task_thread_start;
+    }
     Spawn([t] {
         t_current = t;
         char name[32];
@@ -453,7 +471,7 @@ void StartThread(ThreadRef t) {
         Unregister(t.get());
         mem::FreeStack(t->stack_top);  // Shadow-nx, switch-test9 (see ExitThread)
         t_current.reset();
-    });
+    }, small);
 }
 
 void StartHostThread(const char* name, std::function<void(X86Context&)> fn) {

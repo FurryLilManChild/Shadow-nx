@@ -87,3 +87,8 @@ X86_FUNC(sub_0004F440) {
          double(shadow::Now() - t0) / 1e9, obj, obj ? R32(obj) : 0, obj ? G<uint8_t>(obj + 8) : 0,
          obj ? G<uint8_t>(obj + 9) : 0, obj ? G<uint8_t>(obj + 10) : 0);
 }
+
+// Shadow-nx 0.5.0 RC3: threads of the title's thread class (CreateThread(0x4F440, object) in 0x4F4F0) get the small
+// host stack (kernel.h g_task_thread_start): the loading job and every stage piece loader. switch-test6 measured them
+// at 12 KB at most.
+static const bool g_task_threads_small = (kernel::g_task_thread_start = 0x0004F440, true);

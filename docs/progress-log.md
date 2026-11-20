@@ -3,6 +3,16 @@
 sheroes-nx's log (the Sonic Heroes port this one starts from) is in `docs/sheroes-nx/progress-log.md`; read it
 first, since most of its problems were in shared code and are already fixed here.
 
+## 2026-11-20 (0.5.0 RC2 results, RC3 build)
+
+- RC2: check_log MATCH (fd0af76231f0); release defaults held; 51 to 60 fps in play at stock. At 37.6 s one
+  threadCreate failed with 0xDC01 (InvalidMemoryRegion: no room left in the stack region for another 64 MB mirror)
+  with 19 host threads alive; the retry worked. Shader cache from three stages: 78 SPIR-V modules, all 78 baked in
+  the cloud byte-identical to the console's own .dk2.
+- RC3: the title's task threads (start 0x4F440: the loading job and the stage piece loaders, 12 KB of stack at most
+  in switch-test6) get 8 MB host stacks from a second pool; others keep 64 MB. The memory line gives the most host
+  threads alive at once and both pools.
+
 ## 2026-11-20 (Switch test 10 results, 0.5.0 release candidate)
 
 - Test 10: self test PASSED (2000 host threads, 2000 guest stacks, nothing left over, 3.5 s); a cutscene, a stage, a

@@ -186,6 +186,8 @@ void HostSelfTest();
 // Shadow-nx 0.5.0: the diagnostics of switch-tests 5 to 10, off in a release (settings trace_threads, self_test)
 inline bool g_trace = false;      // thread lifecycle, file opens, the task loop
 inline bool g_self_test = false;  // HostSelfTest at boot
+// the guest start routine of the title's task threads, which get an 8 MB host stack instead of 64 MB (0: none)
+inline uint32_t g_task_thread_start = 0;
 #define TRACE(...)                              \
     do {                                        \
         if (::kernel::g_trace) LOGR(__VA_ARGS__); \
