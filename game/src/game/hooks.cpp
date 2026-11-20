@@ -36,13 +36,15 @@ void MovieSkipPad(input::Pad& pad) {
     // Shadow-nx, switch-test4: a click of the right stick (R3) saves a screenshot to screenshots/ beside the NRO and
     // does not reach the game
     static bool r3_held = false;
-    bool r3 = pad.buttons & 0x80;
-    if (r3 && !r3_held) {
-        gpu::g_screenshot = true;
-        LOGR("screenshot asked for (right stick click)");
+    if (gpu::g_screenshot_button) {
+        bool r3 = pad.buttons & 0x80;
+        if (r3 && !r3_held) {
+            gpu::g_screenshot = true;
+            LOGR("screenshot asked for (right stick click)");
+        }
+        r3_held = r3;
+        pad.buttons &= uint16_t(~0x80u);
     }
-    r3_held = r3;
-    pad.buttons &= uint16_t(~0x80u);
     bool start = pad.buttons & 16;
     if (MoviePlaying()) {
         if (start && !g_start_held && !g_skip.exchange(true)) LOGR("movie: skipped (Start)");

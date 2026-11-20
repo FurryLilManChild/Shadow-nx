@@ -46,6 +46,8 @@ guest_one_core = true
 wait_monitor = false
 trace_threads = false
 self_test = false
+# true: a click of the right stick saves a screenshot to screenshots/ (and the game does not get the click).
+screenshot_button = false
 
 # "vsync" (default): with vsync on and fps_cap 60, the screen paces the game (smoother: a slow frame now and then is
 # hidden by the frames already queued). "timer": the game also waits on its own 60 Hz clock (the older builds).

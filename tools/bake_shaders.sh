@@ -15,8 +15,10 @@ work=$(mktemp -d)
 mkdir -p "$work/spv" "$work/baked" "$out"
 for d in "$@"; do
     [ -d "$d" ] || continue
-    cp -n "$d"/*.spv "$work/spv/" 2>/dev/null || true
-    for k in "$d"/*.dk2; do [ -e "$k" ] && cp -n "$k" "$work/spv/"; done
+    for k in "$d"/*.spv "$d"/*.dk2; do
+        [ -e "$k" ] || continue
+        [ -e "$work/spv/$(basename "$k")" ] || cp "$k" "$work/spv/"
+    done
 done
 "$build/dk_shaders" "$work/spv" "$work/baked" > "$work/report.txt" || true
 tail -4 "$work/report.txt"

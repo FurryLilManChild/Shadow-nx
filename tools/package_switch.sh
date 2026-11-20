@@ -7,7 +7,7 @@ here=$(cd "$(dirname "$0")/.." && pwd)
 zip_out=$(realpath -m "$1"); cache=${2:-}
 work=$(mktemp -d); d="$work/switch/shadow"
 mkdir -p "$d/game"
-cp "$here/build-switch/shadow.nro" "$here/switch/shadow-settings.toml" "$here/LICENSES.txt" "$d/"
+cp "$here/build-switch/shadow.nro" "$here/switch/shadow-settings.toml" "$here/LICENSES.txt" "$here/THIRD_PARTY.txt" "$d/"
 printf 'Put your Shadow the Hedgehog disc (Xbox, USA) here: an .iso image of it (a trimmed XISO works),\nor its files (default.xbe with all its folders).\n' > "$d/game/PUT-THE-GAME-HERE.txt"
 [ -n "$cache" ] && mkdir -p "$d/shadercache" && cp "$cache"/*.spv "$cache"/*.dk2 "$d/shadercache/"
 cp "$here/README.md" "$work/"

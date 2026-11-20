@@ -97,6 +97,9 @@ inline uint64_t g_state_generation = 1;
 inline std::atomic<bool> g_capture{false};
 // F12 composed PNG screenshot; F3 diagnostic capture remains separate.
 inline std::atomic<bool> g_screenshot{false};
+// Shadow-nx 0.5.0: the right stick click takes a screenshot (and is kept from the game) only with the setting
+// screenshot_button = true; off in a release so the game gets R3
+inline bool g_screenshot_button = false;
 // after each swap the new back buffer holds a copy of the frame just shown, as D3DSWAPEFFECT_COPY would: for titles
 // that draw over the previous frame although they asked for flips (FIFA Street's loading bar). Set by GameInfo::init.
 inline bool g_swap_keeps_back_buffer = false;

@@ -130,6 +130,7 @@ toml::table Table() {
                   {"wait_monitor", kernel::waitmon::g_on},
                   {"trace_threads", kernel::g_trace},
                   {"self_test", kernel::g_self_test},
+                  {"screenshot_button", gpu::g_screenshot_button},
                   {"x86_memory_order", x86_g_tso},
                   {"core_layout", g_core_layout},
                   {"guest_one_core", g_guest_one_core_next},
@@ -204,6 +205,7 @@ void Load() {
     kernel::waitmon::g_on = t["wait_monitor"].value_or(kernel::waitmon::g_on);
     kernel::g_trace = t["trace_threads"].value_or(kernel::g_trace);
     kernel::g_self_test = t["self_test"].value_or(kernel::g_self_test);
+    gpu::g_screenshot_button = t["screenshot_button"].value_or(gpu::g_screenshot_button);
     x86_g_tso = t["x86_memory_order"].value_or(x86_g_tso);
     g_core_layout = t["core_layout"].value_or(g_core_layout);
     g_guest_one_core = g_guest_one_core_next = t["guest_one_core"].value_or(g_guest_one_core);

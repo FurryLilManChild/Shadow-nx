@@ -22,7 +22,8 @@ loading screens, on an unpatched V1 Switch at stock clocks.
    `sdmc:/switch/shadow/shadow.nro`.
 2. Put your game in `sdmc:/switch/shadow/game/`: either a disc image (`.iso`, a trimmed XISO works) or the files of
    the disc (`default.xbe` with all its folders).
-3. Launch it through title takeover: hold R while opening any game, then pick Shadow-nx in the Homebrew Menu. The
+3. Launch it through title takeover: hold R while opening any game, then pick "Shadow the Hedgehog (Xbox recomp)" in the Homebrew
+   Menu. The
    Album applet does not have enough memory for it.
 
 The supported `default.xbe` (USA, title 53450086) has this SHA-256:
@@ -38,7 +39,7 @@ Press + and - together for the port menu: button layout, camera inversion, steer
 scene, texture filtering, smoothing (SMAA), the FPS counter, music and effects volume, and a CPU boost. It saves to
 `sdmc:/switch/shadow/shadow-settings.toml`, which also explains each setting.
 
-Logs go to `sdmc:/switch/shadow/logs/`. The first line of `shadow.log` names the build and its commit.
+Logs go to `sdmc:/switch/shadow/logs/`. Near the top, `shadow.log` names the build and its commit.
 
 ## Known issues
 

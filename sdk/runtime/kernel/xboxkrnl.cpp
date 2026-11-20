@@ -912,7 +912,7 @@ KERNEL_EXPORT(148, KeSetPriorityThread, 2) {
     int old = t->priority;
     t->priority = int32_t(a[1]);
     // Shadow-nx, switch-test8: which of the title's routines raise and drop priorities (the first 120)
-    LOG_FIRSTR(120, "threads: KeSetPriorityThread %08X to %d (was %d) by %X; from %s", a[0], int32_t(a[1]), old,
+    if (g_trace) LOG_FIRSTR(120, "threads: KeSetPriorityThread %08X to %d (was %d) by %X; from %s", a[0], int32_t(a[1]), old,
                Current() ? Current()->id : 0, waitmon::CallerChain(ctx).c_str());
     ApplyPriority(*t);
     return uint32_t(old);
@@ -930,7 +930,7 @@ KERNEL_EXPORT(143, KeSetBasePriorityThread, 2) {
     int old = t.priority;
     t.priority = int32_t(a[1]);
     // Shadow-nx, switch-test8: which of the title's routines raise and drop priorities (the first 120)
-    LOG_FIRSTR(120, "threads: KeSetBasePriorityThread %08X to %d (was %d) by %X; from %s", a[0], int32_t(a[1]), old,
+    if (g_trace) LOG_FIRSTR(120, "threads: KeSetBasePriorityThread %08X to %d (was %d) by %X; from %s", a[0], int32_t(a[1]), old,
                Current() ? Current()->id : 0, waitmon::CallerChain(ctx).c_str());
     ApplyPriority(t);
     return uint32_t(old);
